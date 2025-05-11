@@ -78,3 +78,8 @@ def add_warning(group_id: int, user_id: int, username: str):
         }]
         requests.post(url, headers=headers, json=insert_data)
         return 1
+
+def remove_warning(group_id: int, user_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/warnings?group_id=eq.{group_id}&user_id=eq.{user_id}"
+    response = requests.delete(url, headers=headers)
+    return response.status_code in [200, 204]
