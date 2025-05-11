@@ -181,21 +181,23 @@ async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # دستور حذف سکوت کاربر
 async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # فقط ادمین‌ها اجازه دارند
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
 
     if update.effective_user.id not in admin_ids:
-        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند سکوت را حذف کنند.")
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند سکوت را بردارند.")
         return
 
-    user = await get_target_user(update, context)
-    if not user:
-        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+    # باید روی پیام کاربر ریپلای زده شود
+    user_to_unmute = update.message.reply_to_message.from_user if update.message.reply_to_message else None
+    if not user_to_unmute:
+        await update.message.reply_text("لطفاً روی پیام کاربر ریپلای بزنید.")
         return
 
     await context.bot.restrict_chat_member(
         chat_id=update.effective_chat.id,
-        user_id=user.id,
+        user_id=user_to_unmute.id,
         permissions=ChatPermissions(
             can_send_messages=True,
             can_send_media_messages=True,
@@ -203,7 +205,8 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
             can_add_web_page_previews=True
         )
     )
-    await update.message.reply_text(f"🔊 @{user.username} می‌تونه دوباره پیام بده.")
+    await update.message.reply_text(f"🔓 @{user_to_unmute.username or 'کاربر'} از حالت سکوت خارج شد.")
+
 
 # حذف همه اخطارها
 async def unwarn(update: Update, context: ContextTypes.DEFAULT_TYPE):
