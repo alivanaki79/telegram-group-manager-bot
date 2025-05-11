@@ -48,9 +48,15 @@ def get_subscription_status(group_id: int):
         headers=HEADERS
     )
     data = response.json()
-    if not data:
+
+    if not isinstance(data, list) or len(data) == 0:
         return "not_found"
 
-    end_date = datetime.fromisoformat(data[0]['end_date'])
+    end_date_str = data[0].get('end_date')
+    if not end_date_str:
+        return "not_found"
+
+    end_date = datetime.fromisoformat(end_date_str)
     remaining_days = (end_date - datetime.utcnow()).days
     return remaining_days
+
