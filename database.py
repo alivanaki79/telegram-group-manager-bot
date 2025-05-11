@@ -79,7 +79,24 @@ def add_warning(group_id: int, user_id: int, username: str):
         requests.post(url, headers=headers, json=insert_data)
         return 1
 
-def remove_warning(group_id: int, user_id: int):
+def get_warning_count(group_id: int, user_id: int):
     url = f"{SUPABASE_URL}/rest/v1/warnings?group_id=eq.{group_id}&user_id=eq.{user_id}"
-    response = requests.delete(url, headers=headers)
-    return response.status_code in [200, 204]
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    return data[0]["count"] if data else 0
+
+def remove_warning(group_id: int, user_id: int, count_to_remove: int = 1):
+    url = f"{SUPABASE_URL}/rest/v1/warnings?group_id=eq.{group_id}&user_id=eq.{user_id}"
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    if data:
+        current = data[0]["count"]
+        new_count = max(0, current - count_to_remove)
+        update_data = {
+            "count": new_count,
+            "last_warning": datetime.utcnow().isoformat()
+        }
+        requests.patch(url, headers=headers, json=update_data)
+        return new_count
+    return 0
+
