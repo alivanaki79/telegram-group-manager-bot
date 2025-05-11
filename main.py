@@ -128,14 +128,19 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     count = add_warning(update.effective_chat.id, user_to_warn.id, user_to_warn.username or "بدون نام")
 
-    if count >= 3:
-        await context.bot.restrict_chat_member(
-            chat_id=update.effective_chat.id,
-            user_id=user_to_warn.id,
-            permissions=ChatMember.NO_PERMISSIONS,
-            until_date=None
-        )
-        await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
+if count >= 3:
+    await context.bot.restrict_chat_member(
+        chat_id=update.effective_chat.id,
+        user_id=user_to_warn.id,
+        permissions=ChatPermissions(
+            can_send_messages=False,
+            can_send_media_messages=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=False
+        ),
+        until_date=None
+    )
+    await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
     else:
         await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
 
