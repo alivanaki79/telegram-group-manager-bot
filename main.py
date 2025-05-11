@@ -17,7 +17,7 @@ WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "group":
+    if update.effective_chat.type not in ["group", "supergroup"]:
         await update.message.reply_text("این دستور فقط در گروه‌ها قابل استفاده است.")
         return
 
