@@ -9,11 +9,13 @@ from config import BOT_TOKEN
 from database import add_group, get_subscription_status
 
 app = FastAPI()
-application: Application = None
+application: Application = None  # برای مدیریت بات تلگرام
 
+# آدرس وبهوک برای تلگرام
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
 
+# دستور /start برای ثبت گروه
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type not in ["group", "supergroup"]:
         await update.message.reply_text("این دستور فقط در گروه‌ها قابل استفاده است.")
@@ -23,28 +25,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     title = update.effective_chat.title or "بدون عنوان"
 
     if add_group(group_id, title):
-        await update.message.reply_text(f"✅ گروه ثبت شد: {title}")
-    else:
-        await update.message.reply_text("⚠️ این گروه قبلاً ثبت شده است.")
+        await update.message.reply_text(f"✅ گروه «{title}» با موفقیت ثبت شد.")
 
-    # بررسی اشتراک
     days = get_subscription_status(group_id)
-    if days == "not_found":
-        await update.message.reply_text("❌ اشتراک پیدا نشد.")
-    elif days <= 5:
-        await update.message.reply_text(f"⏳ فقط {days} روز تا پایان اشتراک باقی مانده است.")
+    if days == -1:
+        await update.message.reply_text("❌ اشتراکی برای این گروه پیدا نشد.")
+    elif days <= 3:
+        await update.message.reply_text(f"⚠️ اشتراک این گروه تا {days} روز دیگر منقضی می‌شود.")
+    else:
+        await update.message.reply_text(f"📅 اشتراک این گروه تا {days} روز دیگر فعال است.")
 
+# رویداد شروع برنامه
 @app.on_event("startup")
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
 
+    # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
     await application.start()
     print(f"✅ Webhook set to {WEBHOOK_URL}")
 
+# هندل کردن پیام‌های دریافتی از تلگرام
 @app.post(WEBHOOK_PATH)
 async def webhook_handler(request: Request):
     data = await request.json()
@@ -52,10 +56,12 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
+# برای تست در مرورگر
 @app.get("/")
 def root():
-    return {"status": "Bot is alive!"}
+    return {"status": "Bot is running!"}
 
+# اجرای برنامه با uvicorn
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
