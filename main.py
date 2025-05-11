@@ -102,8 +102,6 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return None
     
 # اخطار به کاربر
-from database import add_warning  # اطمینان حاصل کن این بالای فایل هست
-
 async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
@@ -135,27 +133,51 @@ if count >= 3:
     else:
         await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
 
+
 # دستور ساکت شدن کاربر
 async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
 
     if update.effective_user.id not in admin_ids:
-        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند کاربر را ساکت کنند.")
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند سکوت کنند.")
         return
 
-    user = await get_target_user(update, context)
+    user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
     if not user:
-        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+        await update.message.reply_text("باید روی پیام فرد مورد نظر ریپلای کنی.")
         return
+
+    duration = context.args[0] if context.args else "10m"
+    time_match = re.match(r"(\d+)([smhd])", duration)
+
+    if not time_match:
+        await update.message.reply_text("فرمت زمان نامعتبر است. مثال: 10m یا 2h")
+        return
+
+    amount, unit = int(time_match.group(1)), time_match.group(2)
+    delta = {
+        "s": timedelta(seconds=amount),
+        "m": timedelta(minutes=amount),
+        "h": timedelta(hours=amount),
+        "d": timedelta(days=amount)
+    }[unit]
+
+    until_date = datetime.utcnow() + delta
 
     await context.bot.restrict_chat_member(
         chat_id=update.effective_chat.id,
         user_id=user.id,
-        permissions=ChatMember.NO_PERMISSIONS,
-        until_date=None
+        permissions=ChatPermissions(
+            can_send_messages=False,
+            can_send_media_messages=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=False
+        ),
+        until_date=until_date
     )
-    await update.message.reply_text(f"🔇 @{user.username} ساکت شد.")
+    await update.message.reply_text(f"🔇 @{user.username} برای {duration} ساکت شد.")
+
 
 # دستور حذف سکوت کاربر
 async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,24 +205,20 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(f"🔊 @{user.username} می‌تونه دوباره پیام بده.")
 
-from database import remove_warning
-
 # حذف همه اخطارها
 async def unwarn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
-
+    
     if update.effective_user.id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند اخطار را حذف کنند.")
         return
 
-    user = await get_target_user(update, context)
+    user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
     if not user:
-        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+        await update.message.reply_text("باید روی پیام شخص مورد نظر ریپلای کنی.")
         return
 
-    removed = remove_warning(update.effective_chat.id, user.id)
-    if removed:
-        await update.message.reply_text(f"✅ همه‌ی اخطارهای @{user.username} حذف شد.")
-    else:
-        await update.message.reply_text(f"ℹ️ هیچ اخطاری برای @{user.username} ثبت نشده.")
+    count_to_remove = int(context.args[0]) if context.args and context.args[0].isdigit() else 1
+    new_count = remove_warning(update.effective_chat.id, user.id, count_to_remove)
+    await update.message.reply_text(f"ℹ️ اخطارهای @{user.username} کم شد. تعداد جدید: {new_count}")
