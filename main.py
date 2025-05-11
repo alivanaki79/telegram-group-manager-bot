@@ -9,6 +9,7 @@ from telegram.ext import (
 )
 from config import BOT_TOKEN
 from database import add_group
+from datetime import datetime, timedelta
 
 app = FastAPI()
 application: Application = None  # Global variable for Telegram Application
@@ -28,6 +29,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ گروه ثبت شد: {title}")
     else:
         await update.message.reply_text("❌ مشکلی در ثبت گروه پیش آمد.")
+
+async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "group":
+        await update.message.reply_text("این دستور فقط در گروه‌ها قابل استفاده است.")
+        return
+
+    group_id = update.effective_chat.id
+    sub = get_subscription(group_id)
+    if sub:
+        await update.message.reply_text(
+            f"📅 اشتراک فعال تا: {sub['end_date']}"
+        )
+    else:
+        # به طور پیش‌فرض 30 روز اشتراک ایجاد کن
+        start_date = datetime.now().date()
+        end_date = start_date + timedelta(days=30)
+        if set_subscription(group_id, str(start_date), str(end_date)):
+            await update.message.reply_text(
+                f"✅ اشتراک برای 30 روز فعال شد. تا {end_date} معتبر است."
+            )
+        else:
+            await update.message.reply_text("❌ مشکلی در فعال‌سازی اشتراک پیش آمد.")
+
 
 @app.on_event("startup")
 async def startup():
