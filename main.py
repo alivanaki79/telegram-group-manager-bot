@@ -1,5 +1,3 @@
-# main.py
-
 import os
 import uvicorn
 from fastapi import FastAPI, Request
@@ -8,11 +6,12 @@ from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes
 )
 from config import BOT_TOKEN
-from database import add_group
+from database import add_group, get_all_groups, update_warned, delete_expired_groups
 from datetime import datetime, timedelta
+import asyncio
 
 app = FastAPI()
-application: Application = None  # Global variable for Telegram Application
+application: Application = None
 
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
@@ -28,44 +27,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if add_group(group_id, title):
         await update.message.reply_text(f"✅ گروه ثبت شد: {title}")
     else:
-        await update.message.reply_text("❌ مشکلی در ثبت گروه پیش آمد.")
+        await update.message.reply_text("❌ این گروه قبلاً ثبت شده یا خطایی رخ داده.")
 
-async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "group":
-        await update.message.reply_text("این دستور فقط در گروه‌ها قابل استفاده است.")
-        return
+async def check_subscriptions():
+    while True:
+        now = datetime.utcnow()
+        groups = get_all_groups()
 
-    group_id = update.effective_chat.id
-    sub = get_subscription(group_id)
-    if sub:
-        await update.message.reply_text(
-            f"📅 اشتراک فعال تا: {sub['end_date']}"
-        )
-    else:
-        # به طور پیش‌فرض 30 روز اشتراک ایجاد کن
-        start_date = datetime.now().date()
-        end_date = start_date + timedelta(days=30)
-        if set_subscription(group_id, str(start_date), str(end_date)):
-            await update.message.reply_text(
-                f"✅ اشتراک برای 30 روز فعال شد. تا {end_date} معتبر است."
-            )
-        else:
-            await update.message.reply_text("❌ مشکلی در فعال‌سازی اشتراک پیش آمد.")
+        for group in groups:
+            gid = group["group_id"]
+            expires = datetime.fromisoformat(group["expires_at"])
+            warned = group.get("warned", False)
 
+            if expires < now:
+                await application.bot.send_message(chat_id=gid, text="❌ اشتراک گروه شما به پایان رسیده و ربات غیرفعال شد.")
+                print(f"⛔ گروه حذف شد: {gid}")
+            elif not warned and expires - now < timedelta(days=3):
+                await application.bot.send_message(chat_id=gid, text="⏰ اشتراک شما کمتر از ۳ روز دیگر به پایان می‌رسد.")
+                update_warned(gid)
+
+        delete_expired_groups()
+        await asyncio.sleep(3600 * 6)  # هر ۶ ساعت
 
 @app.on_event("startup")
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("subscription", subscription))
-    
-    # Set webhook to this server
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
     await application.start()
+    asyncio.create_task(check_subscriptions())
     print(f"✅ Webhook set to {WEBHOOK_URL}")
-
 
 @app.post(WEBHOOK_PATH)
 async def webhook_handler(request: Request):
@@ -74,10 +67,10 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # PORT متغیر مخصوص Render هست
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
-
 @app.get("/")
 def root():
     return {"status": "Bot is alive!"}
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
