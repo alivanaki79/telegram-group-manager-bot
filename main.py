@@ -1,10 +1,14 @@
 import os
 import uvicorn
-from telegram import ChatMember
 from telegram.ext import MessageHandler, filters
 from database import add_warning
+from database import remove_warning
 from fastapi import FastAPI, Request
 from telegram import Update
+from telegram import ChatPermissions
+from telegram import ChatMember
+
+
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes
 )
@@ -45,6 +49,10 @@ async def startup():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("warn", warn))
+    application.add_handler(CommandHandler("mute", mute))
+    application.add_handler(CommandHandler("unmute", unmute))
+    application.add_handler(CommandHandler("unwarn", unwarn))
+
 
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
@@ -70,23 +78,46 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
 
+# مشخص کردن کاربر
+async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # اگر ریپلای کرده بود
+    if update.message.reply_to_message:
+        return update.message.reply_to_message.from_user
+
+    # اگر آرگومان داده بود
+    if context.args:
+        user_input = context.args[0]
+
+        # اگر آیدی عددی بود
+        if user_input.isdigit():
+            try:
+                return await context.bot.get_chat_member(update.effective_chat.id, int(user_input)).user
+            except:
+                return None
+
+        # اگر یوزرنیم بود
+        if user_input.startswith('@'):
+            try:
+                return await context.bot.get_chat_member(update.effective_chat.id, user_input).user
+            except:
+                return None
+
+    return None
+    
 # اخطار به کاربر
+from database import add_warning  # اطمینان حاصل کن این بالای فایل هست
+
 async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # فقط ادمین‌ها اجازه دارند اخطار بدهند
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
-    
+
     if update.effective_user.id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند اخطار بدهند.")
         return
 
-    if not context.args:
-        await update.message.reply_text("لطفاً یک یوزرنیم یا ریپلای مشخص کن.")
-        return
-
-    user_to_warn = update.message.reply_to_message.from_user if update.message.reply_to_message else None
+    user_to_warn = await get_target_user(update, context)
     if not user_to_warn:
-        await update.message.reply_text("باید روی پیام شخص مورد نظر ریپلای کنی.")
+        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
         return
 
     count = add_warning(update.effective_chat.id, user_to_warn.id, user_to_warn.username or "بدون نام")
@@ -98,6 +129,76 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             permissions=ChatMember.NO_PERMISSIONS,
             until_date=None
         )
-        await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت 3 اخطار، ساکت شد.")
+        await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
     else:
         await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
+
+# دستور ساکت شدن کاربر
+async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند کاربر را ساکت کنند.")
+        return
+
+    user = await get_target_user(update, context)
+    if not user:
+        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+        return
+
+    await context.bot.restrict_chat_member(
+        chat_id=update.effective_chat.id,
+        user_id=user.id,
+        permissions=ChatMember.NO_PERMISSIONS,
+        until_date=None
+    )
+    await update.message.reply_text(f"🔇 @{user.username} ساکت شد.")
+
+# دستور حذف سکوت کاربر
+async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند سکوت را حذف کنند.")
+        return
+
+    user = await get_target_user(update, context)
+    if not user:
+        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+        return
+
+    await context.bot.restrict_chat_member(
+        chat_id=update.effective_chat.id,
+        user_id=user.id,
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True
+        )
+    )
+    await update.message.reply_text(f"🔊 @{user.username} می‌تونه دوباره پیام بده.")
+
+from database import remove_warning
+
+# حذف همه اخطارها
+async def unwarn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند اخطار را حذف کنند.")
+        return
+
+    user = await get_target_user(update, context)
+    if not user:
+        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+        return
+
+    removed = remove_warning(update.effective_chat.id, user.id)
+    if removed:
+        await update.message.reply_text(f"✅ همه‌ی اخطارهای @{user.username} حذف شد.")
+    else:
+        await update.message.reply_text(f"ℹ️ هیچ اخطاری برای @{user.username} ثبت نشده.")
