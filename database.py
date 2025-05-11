@@ -4,7 +4,7 @@ from config import SUPABASE_URL, SUPABASE_API_KEY
 
 headers = {
     "apikey": SUPABASE_API_KEY,
-    "Authorization": f"Bearer {SUPABASE_API_KEY}"
+    "Authorization": f"Bearer {SUPABASE_API_KEY}",
     "Content-Type": "application/json"
 }
 
