@@ -2,61 +2,67 @@ import requests
 from datetime import datetime, timedelta
 from config import SUPABASE_URL, SUPABASE_API_KEY
 
-HEADERS = {
+headers = {
     "apikey": SUPABASE_API_KEY,
     "Authorization": f"Bearer {SUPABASE_API_KEY}",
     "Content-Type": "application/json"
 }
 
 def add_group(group_id, title):
-    # بررسی وجود گروه
-    check = requests.get(
-        f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}",
-        headers=HEADERS
-    )
-    if check.status_code == 200 and check.json():
-        return False  # گروه قبلاً ثبت شده
+    now = datetime.utcnow().isoformat()
 
-    now = datetime.utcnow()
-    expires_at = now + timedelta(days=30)
-
-    data = {
-        "group_id": group_id,
-        "title": title,
-        "joined_at": now.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "warned": False
-    }
-
+    # 1. ثبت در جدول groups
     res = requests.post(
         f"{SUPABASE_URL}/rest/v1/groups",
-        headers=HEADERS,
-        json=data
+        headers=headers,
+        json={"group_id": group_id, "title": title, "created_at": now}
     )
 
-    return res.status_code in [200, 201]
+    if res.status_code not in [200, 201]:
+        # اگر قبلاً ثبت شده، ادامه بده
+        if "duplicate key" not in res.text:
+            print("خطا در ثبت گروه:", res.text)
+            return False
 
-def get_all_groups():
+    # 2. ایجاد اشتراک 30 روزه
+    start = datetime.utcnow().date().isoformat()
+    end = (datetime.utcnow() + timedelta(days=30)).date().isoformat()
+
+    requests.post(
+        f"{SUPABASE_URL}/rest/v1/subscriptions",
+        headers=headers,
+        json={"group_id": group_id, "start_date": start, "end_date": end}
+    )
+
+    # 3. تنظیمات پیش‌فرض
+    requests.post(
+        f"{SUPABASE_URL}/rest/v1/settings",
+        headers=headers,
+        json={
+            "group_id": group_id,
+            "welcome_message": "خوش آمدی!",
+            "filter_links": True,
+            "filter_words": [],
+            "silent_mode": False
+        }
+    )
+
+    return True
+
+def get_subscription_status(group_id):
     res = requests.get(
-        f"{SUPABASE_URL}/rest/v1/groups",
-        headers=HEADERS
+        f"{SUPABASE_URL}/rest/v1/subscriptions?group_id=eq.{group_id}",
+        headers=headers
     )
-    if res.status_code == 200:
-        return res.json()
-    return []
 
-def update_warned(group_id, warned=True):
-    res = requests.patch(
-        f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}",
-        headers=HEADERS,
-        json={"warned": warned}
-    )
-    return res.status_code == 204
+    if res.status_code != 200 or not res.json():
+        return None
 
-def delete_expired_groups():
-    now = datetime.utcnow().isoformat()
-    res = requests.delete(
-        f"{SUPABASE_URL}/rest/v1/groups?expires_at=lt.{now}",
-        headers=HEADERS
-    )
-    return res.status_code == 204
+    data = res.json()[0]
+    end_date = datetime.fromisoformat(data["end_date"])
+    remaining = (end_date - datetime.utcnow()).days
+
+    return {
+        "end_date": data["end_date"],
+        "days_left": remaining
+    }
