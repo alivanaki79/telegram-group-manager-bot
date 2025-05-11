@@ -6,9 +6,7 @@ from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes
 )
 from config import BOT_TOKEN
-from database import add_group, get_all_groups, update_warned, delete_expired_groups
-from datetime import datetime, timedelta
-import asyncio
+from database import add_group, get_subscription_status
 
 app = FastAPI()
 application: Application = None
@@ -27,37 +25,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if add_group(group_id, title):
         await update.message.reply_text(f"✅ گروه ثبت شد: {title}")
     else:
-        await update.message.reply_text("❌ این گروه قبلاً ثبت شده یا خطایی رخ داده.")
+        await update.message.reply_text("⚠️ این گروه قبلاً ثبت شده است.")
 
-async def check_subscriptions():
-    while True:
-        now = datetime.utcnow()
-        groups = get_all_groups()
-
-        for group in groups:
-            gid = group["group_id"]
-            expires = datetime.fromisoformat(group["expires_at"])
-            warned = group.get("warned", False)
-
-            if expires < now:
-                await application.bot.send_message(chat_id=gid, text="❌ اشتراک گروه شما به پایان رسیده و ربات غیرفعال شد.")
-                print(f"⛔ گروه حذف شد: {gid}")
-            elif not warned and expires - now < timedelta(days=3):
-                await application.bot.send_message(chat_id=gid, text="⏰ اشتراک شما کمتر از ۳ روز دیگر به پایان می‌رسد.")
-                update_warned(gid)
-
-        delete_expired_groups()
-        await asyncio.sleep(3600 * 6)  # هر ۶ ساعت
+    # بررسی اشتراک
+    days = get_subscription_status(group_id)
+    if days == "not_found":
+        await update.message.reply_text("❌ اشتراک پیدا نشد.")
+    elif days <= 5:
+        await update.message.reply_text(f"⏳ فقط {days} روز تا پایان اشتراک باقی مانده است.")
 
 @app.on_event("startup")
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
     await application.start()
-    asyncio.create_task(check_subscriptions())
     print(f"✅ Webhook set to {WEBHOOK_URL}")
 
 @app.post(WEBHOOK_PATH)
