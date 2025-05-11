@@ -1,24 +1,16 @@
 import os
 import uvicorn
-from telegram.ext import MessageHandler, filters
-from database import add_warning
-from database import remove_warning
+import re
+from datetime import timedelta, datetime
+
 from fastapi import FastAPI, Request
-from telegram import Update
-from telegram import ChatPermissions
-
-permissions=ChatPermissions(
-    can_send_messages=False,
-    can_send_media_messages=False,
-    can_send_other_messages=False,
-    can_add_web_page_previews=False
-),
-
+from telegram import Update, ChatPermissions
 from telegram.ext import (
-    Application, ApplicationBuilder, CommandHandler, ContextTypes
+    Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 )
+
 from config import BOT_TOKEN
-from database import add_group, get_subscription_status
+from database import add_group, get_subscription_status, add_warning, remove_warning, get_warning_count
 
 app = FastAPI()
 application: Application = None  # برای مدیریت بات تلگرام
