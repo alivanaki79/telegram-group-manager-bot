@@ -34,12 +34,14 @@ async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-
+    application.add_handler(CommandHandler("subscription", subscription))
+    
     # Set webhook to this server
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
     await application.start()
     print(f"✅ Webhook set to {WEBHOOK_URL}")
+
 
 @app.post(WEBHOOK_PATH)
 async def webhook_handler(request: Request):
