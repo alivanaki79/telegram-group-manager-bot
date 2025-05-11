@@ -1,6 +1,7 @@
 # main.py
 
 import os
+import uvicorn
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import (
@@ -46,3 +47,8 @@ async def webhook_handler(request: Request):
     update = Update.de_json(data, application.bot)
     await application.process_update(update)
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))  # PORT متغیر مخصوص Render هست
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
+
