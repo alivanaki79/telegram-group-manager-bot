@@ -1,62 +1,52 @@
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from config import SUPABASE_URL, SUPABASE_API_KEY
 
-HEADERS = {
+headers = {
     "apikey": SUPABASE_API_KEY,
-    "Authorization": f"Bearer {SUPABASE_API_KEY}",
-    "Content-Type": "application/json"
+    "Authorization": f"Bearer {SUPABASE_API_KEY}"
 }
 
-def add_group(group_id: int, title: str) -> bool:
-    # بررسی اینکه آیا گروه قبلاً ثبت شده
-    response = requests.get(f"{SUPABASE_URL}/groups?group_id=eq.{group_id}", headers=HEADERS)
-    if response.json():
-        return False
+def add_group(group_id, title):
+    url = f"{SUPABASE_URL}/rest/v1/groups"
+    check_url = f"{url}?group_id=eq.{group_id}"
+    res = requests.get(check_url, headers=headers)
 
-    # ثبت در جدول groups
-    group_data = {
+    if res.status_code == 200 and res.json():
+        return False  # گروه قبلاً ثبت شده
+
+    data = {
         "group_id": group_id,
         "title": title
     }
-    res = requests.post(f"{SUPABASE_URL}/groups", headers=HEADERS, json=group_data)
+    insert = requests.post(url, headers={**headers, "Content-Type": "application/json"}, json=data)
 
-    # تنظیم پیام خوش‌آمدگویی پیش‌فرض و سایر تنظیمات
-    settings_data = {
+    if insert.status_code in [200, 201]:
+        return add_subscription(group_id)
+    return False
+
+def add_subscription(group_id):
+    url = f"{SUPABASE_URL}/rest/v1/subscriptions"
+    today = date.today()
+    end = today + timedelta(days=30)
+
+    data = {
         "group_id": group_id,
-        "welcome_message": "خوش آمدی!",
-        "filter_links": True,
-        "filter_words": [],
-        "silent_mode": False
+        "start_date": today.isoformat(),
+        "end_date": end.isoformat()
     }
-    requests.post(f"{SUPABASE_URL}/settings", headers=HEADERS, json=settings_data)
 
-    # ثبت اشتراک ۳۰ روزه
-    today = datetime.utcnow().date()
-    subscription_data = {
-        "group_id": group_id,
-        "start_date": str(today),
-        "end_date": str(today + timedelta(days=30))
-    }
-    requests.post(f"{SUPABASE_URL}/subscriptions", headers=HEADERS, json=subscription_data)
+    res = requests.post(url, headers={**headers, "Content-Type": "application/json"}, json=data)
+    return res.status_code in [200, 201]
 
-    return res.status_code == 201
+def get_subscription_status(group_id):
+    url = f"{SUPABASE_URL}/rest/v1/subscriptions?group_id=eq.{group_id}&select=end_date"
+    res = requests.get(url, headers=headers)
+    data = res.json()
 
-def get_subscription_status(group_id: int):
-    response = requests.get(
-        f"{SUPABASE_URL}/subscriptions?group_id=eq.{group_id}",
-        headers=HEADERS
-    )
-    data = response.json()
+    if not data:
+        return -1  # اشتراک یافت نشد
 
-    if not isinstance(data, list) or len(data) == 0:
-        return "not_found"
-
-    end_date_str = data[0].get('end_date')
-    if not end_date_str:
-        return "not_found"
-
-    end_date = datetime.fromisoformat(end_date_str)
-    remaining_days = (end_date - datetime.utcnow()).days
-    return remaining_days
-
+    end_date = datetime.fromisoformat(data[0]['end_date']).date()
+    days_left = (end_date - date.today()).days
+    return days_left
