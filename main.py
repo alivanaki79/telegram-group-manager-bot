@@ -1,18 +1,20 @@
 import os
 import uvicorn
 import re
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
+import pytz
 
 from fastapi import FastAPI, Request
 from telegram import Update, ChatPermissions
 from telegram.constants import ChatMemberStatus
 from telegram.ext import (
-    Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, ChatMemberHandler
+    Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, ChatMemberHandler, JobQueue
 )
 
 from config import BOT_TOKEN
 from database import add_group, get_subscription_status, add_warning, remove_warning, get_warning_count
 
+night_lock_disabled_groups = set()
 app = FastAPI()
 application: Application = None  # برای مدیریت بات تلگرام
 
@@ -52,10 +54,13 @@ async def startup():
     application.add_handler(CommandHandler("unwarn", unwarn))
     application.add_handler(CommandHandler("ban", ban))
     application.add_handler(CommandHandler("unban", unban))
-    application.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+    application.add_handler(ChatMemberHandler(chat_member_handler, ChatMemberHandler.CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
+    application.add_handler(CommandHandler("cancelnightlock", cancel_night_lock))
+    application.add_handler(CommandHandler("enablenightlock", enable_night_lock))
+    application.job_queue
     
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
@@ -80,18 +85,6 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
-
-# خوش آمد گویی
-async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
-        user = update.chat_member.new_chat_member.user
-        chat = update.chat_member.chat
-        now = datetime.now().strftime("%Y/%m/%d ⏰ %H:%M")
-        await context.bot.send_message(
-            chat_id=chat.id,
-            text=f"🌸 خوش آمدی {user.mention_html()} عزیز به گروه «{chat.title}»!\n📅 {now}",
-            parse_mode='HTML'
-        )
 
 
 # مشخص کردن کاربر
@@ -162,6 +155,44 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"🚫 کاربر {user.mention_html()} به دلیل دریافت ۳ اخطار، به مدت ۱ ساعت ساکت شد.",
             parse_mode='HTML'
+        )
+
+# خوش آمد گویی
+async def chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    old_status = update.chat_member.old_chat_member.status
+    new_status = update.chat_member.new_chat_member.status
+    user = update.chat_member.from_user
+    chat = update.chat_member.chat
+
+    if new_status == ChatMemberStatus.MEMBER:
+        # تاریخ و زمان به وقت تهران
+        tehran_tz = pytz.timezone('Asia/Tehran')
+        now = datetime.now(tehran_tz).strftime("%Y/%m/%d ساعت %H:%M")
+
+        if old_status == ChatMemberStatus.KICKED:
+            text = (
+                f"سلام {user.mention_html()} 👋\n"
+                f"خوش برگشتی به گروه!\n"
+                f"یادمه قبلاً بن شده بودی، لطفاً این بار رعایت کن 🙂\n\n"
+                f"🕒 تاریخ و زمان ورود: {now} 🌹"
+            )
+        elif old_status == ChatMemberStatus.LEFT:
+            text = (
+                f"سلام {user.mention_html()} 👋\n"
+                f"خوش برگشتی به گروه!\n\n"
+                f"🕒 تاریخ و زمان ورود: {now} 🌹"
+            )
+        else:
+            text = (
+                f"سلام {user.mention_html()} 👋\n"
+                f"خوش اومدی به گروه!\n\n"
+                f"🕒 تاریخ و زمان ورود: {now} 🌹"
+            )
+
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=text,
+            parse_mode="HTML"
         )
 
 
@@ -328,7 +359,7 @@ async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
-# قفل شدن گروه
+# 🔒 قفل دستی با زمان مشخص
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
     if issuer.status not in ['administrator', 'creator']:
@@ -343,13 +374,13 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     amount, unit = int(match.group(1)), match.group(2)
     delta = {"s": timedelta(seconds=amount), "m": timedelta(minutes=amount), "h": timedelta(hours=amount), "d": timedelta(days=amount)}[unit]
-    until_date = datetime.utcnow() + delta
 
     await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=False))
     await update.message.reply_text(f"🔒 گروه برای مدت {duration} قفل شد.")
 
+    context.job_queue.run_once(unlock_group, delta, data=update.effective_chat.id)
 
-# باز شدن گروه
+# 🔓 باز کردن دستی گروه
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
     if issuer.status not in ['administrator', 'creator']:
@@ -358,3 +389,67 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
     await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
+
+# 🔓 باز شدن خودکار
+async def unlock_group(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.data
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=True))
+    await context.bot.send_message(chat_id=chat_id, text="🔓 گروه به‌طور خودکار باز شد.")
+
+# 🌙 قفل شبانه خودکار (۲ تا ۷ صبح)
+async def night_lock_job(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.data
+    bot_data = context.application.bot_data
+
+    if bot_data.get(f"nightlock_disabled_{chat_id}", False):
+        return  # قفل شبانه غیرفعال شده
+
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
+    await context.bot.send_message(chat_id=chat_id, text="🌙 گروه به‌طور خودکار برای استراحت شبانه (۲ تا ۷ صبح) قفل شد.")
+
+    now_tehran = datetime.now(pytz.timezone("Asia/Tehran"))
+    unlock_time = now_tehran.replace(hour=7, minute=0, second=0, microsecond=0)
+    if now_tehran.hour >= 7:
+        unlock_time += timedelta(days=1)
+    delta = (unlock_time - now_tehran).total_seconds()
+
+    context.job_queue.run_once(unlock_group, when=delta, data=chat_id)
+
+# 🕒 برنامه‌ریزی اجرای روزانه قفل شبانه
+def schedule_night_lock(job_queue: JobQueue, chat_id: int):
+    tehran = pytz.timezone("Asia/Tehran")
+    now = datetime.now(tehran)
+    next_2am = now.replace(hour=2, minute=0, second=0, microsecond=0)
+    if now.hour >= 2:
+        next_2am += timedelta(days=1)
+    delay = (next_2am - now).total_seconds()
+
+    job_queue.run_repeating(
+        night_lock_job,
+        interval=timedelta(days=1),
+        first=delay,
+        data=chat_id,
+        name=f"nightlock_{chat_id}"
+    )
+
+# ❎ لغو قفل شبانه توسط ادمین (تا زمانی که دوباره فعال نشه)
+async def cancel_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    issuer = await context.bot.get_chat_member(chat_id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را لغو کنند.")
+        return
+
+    context.application.bot_data[f"nightlock_disabled_{chat_id}"] = True
+    await update.message.reply_text("❎ قفل شبانه برای این گروه غیرفعال شد.")
+
+# ✅ فعال‌سازی مجدد قفل شبانه
+async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    issuer = await context.bot.get_chat_member(chat_id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را فعال کنند.")
+        return
+
+    context.application.bot_data[f"nightlock_disabled_{chat_id}"] = False
+    await update.message.reply_text("✅ قفل شبانه برای این گروه فعال شد.")
