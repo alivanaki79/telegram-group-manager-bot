@@ -5,8 +5,9 @@ from datetime import timedelta, datetime
 
 from fastapi import FastAPI, Request
 from telegram import Update, ChatPermissions
+from telegram.constants import ChatMemberStatus
 from telegram.ext import (
-    Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+    Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, ChatMemberHandler
 )
 
 from config import BOT_TOKEN
@@ -49,8 +50,13 @@ async def startup():
     application.add_handler(CommandHandler("mute", mute))
     application.add_handler(CommandHandler("unmute", unmute))
     application.add_handler(CommandHandler("unwarn", unwarn))
-
-
+    application.add_handler(CommandHandler("ban", ban))
+    application.add_handler(CommandHandler("unban", unban))
+    application.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
+    application.add_handler(CommandHandler("lock", lock))
+    application.add_handler(CommandHandler("unlock", unlock))
+    
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
@@ -74,6 +80,19 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
+# خوش آمد گویی
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
+        user = update.chat_member.new_chat_member.user
+        chat = update.chat_member.chat
+        now = datetime.now().strftime("%Y/%m/%d ⏰ %H:%M")
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"🌸 خوش آمدی {user.mention_html()} عزیز به گروه «{chat.title}»!\n📅 {now}",
+            parse_mode='HTML'
+        )
+
 
 # مشخص کردن کاربر
 async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,9 +119,9 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return None
 
     return None
-    
+
+
 # اخطار به کاربر
-# اخطار دادن به کاربر
 async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
@@ -111,23 +130,39 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند اخطار بدهند.")
         return
 
-    user_to_warn = await get_target_user(update, context)
-    if not user_to_warn:
-        await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
+    user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
+    if not user:
+        await update.message.reply_text("باید روی پیام فرد مورد نظر ریپلای کنید.")
         return
 
-    count = add_warning(update.effective_chat.id, user_to_warn.id, user_to_warn.username or "بدون‌نام")
+    member = await context.bot.get_chat_member(update.effective_chat.id, user.id)
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+
+    if user.id == context.bot.id:
+        await update.message.reply_text("❌ نمی‌توانید به ربات اخطار بدهید.")
+        return
+
+    if member.status in ['administrator', 'creator'] and issuer.status != 'creator':
+        await update.message.reply_text("❌ فقط صاحب گروه می‌تواند روی ادمین‌ها اعمالی انجام دهد.")
+        return
+
+    count = add_warning(update.effective_chat.id, user.id, user.username or "بدون‌نام")
+    await update.message.reply_text(
+        f"⚠️ به کاربر {user.mention_html()} اخطار شماره {count} داده شد.",
+        parse_mode='HTML'
+    )
 
     if count >= 3:
         await context.bot.restrict_chat_member(
-            chat_id=update.effective_chat.id,
-            user_id=user_to_warn.id,
+            update.effective_chat.id,
+            user.id,
             permissions=ChatPermissions(can_send_messages=False),
-            until_date=None  # بعداً می‌تونی مدت زمان اضافه کنی
+            until_date=datetime.utcnow() + timedelta(hours=1)
         )
-        await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
-    else:
-        await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
+        await update.message.reply_text(
+            f"🚫 کاربر {user.mention_html()} به دلیل دریافت ۳ اخطار، به مدت ۱ ساعت ساکت شد.",
+            parse_mode='HTML'
+        )
 
 
 # دستور ساکت شدن کاربر
@@ -144,31 +179,35 @@ async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("باید روی پیام فرد مورد نظر ریپلای کنی.")
         return
 
-    duration = context.args[0] if context.args else "10m"
-    time_match = re.match(r"(\d+)([smhd])", duration)
+    member = await context.bot.get_chat_member(update.effective_chat.id, user.id)
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
 
-    if not time_match:
+    if user.id == context.bot.id:
+        await update.message.reply_text("❌ نمی‌توانید ربات را محدود کنید.")
+        return
+
+    if member.status in ['administrator', 'creator'] and issuer.status != 'creator':
+        await update.message.reply_text("❌ فقط صاحب گروه می‌تواند روی ادمین‌ها اعمالی انجام دهد.")
+        return
+
+    duration = context.args[0] if context.args else "10m"
+    match = re.match(r"(\d+)([smhd])", duration)
+    if not match:
         await update.message.reply_text("فرمت زمان نامعتبر است. مثال: 10m یا 2h")
         return
 
-    amount, unit = int(time_match.group(1)), time_match.group(2)
-    delta = {
-        "s": timedelta(seconds=amount),
-        "m": timedelta(minutes=amount),
-        "h": timedelta(hours=amount),
-        "d": timedelta(days=amount)
-    }[unit]
-
+    amount, unit = int(match.group(1)), match.group(2)
+    delta = {"s": timedelta(seconds=amount), "m": timedelta(minutes=amount),
+             "h": timedelta(hours=amount), "d": timedelta(days=amount)}[unit]
     until_date = datetime.utcnow() + delta
 
     await context.bot.restrict_chat_member(
-        chat_id=update.effective_chat.id,
-        user_id=user.id,
+        update.effective_chat.id,
+        user.id,
         permissions=ChatPermissions(can_send_messages=False),
         until_date=until_date
     )
-    await update.message.reply_text(f"🔇 @{user.username} برای {duration} ساکت شد.")
-
+    await update.message.reply_text(f"🔇 کاربر {user.mention_html()} برای {duration} ساکت شد.", parse_mode='HTML')
 
 # دستور حذف سکوت کاربر
 async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -224,3 +263,98 @@ async def unwarn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count_to_remove = int(context.args[0]) if context.args and context.args[0].isdigit() else 1
     new_count = remove_warning(update.effective_chat.id, user.id, count_to_remove)
     await update.message.reply_text(f"ℹ️ اخطارهای @{user.username} کم شد. تعداد جدید: {new_count}")
+
+
+# دستور بن کردن
+async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند کاربران را بن کنند.")
+        return
+
+    user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
+    if not user:
+        await update.message.reply_text("باید روی پیام فرد مورد نظر ریپلای کنید.")
+        return
+
+    member = await context.bot.get_chat_member(update.effective_chat.id, user.id)
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+
+    if user.id == context.bot.id:
+        await update.message.reply_text("❌ نمی‌توانید ربات را بن کنید.")
+        return
+
+    if member.status in ['administrator', 'creator'] and issuer.status != 'creator':
+        await update.message.reply_text("❌ فقط صاحب گروه می‌تواند روی ادمین‌ها اعمالی انجام دهد.")
+        return
+
+    await context.bot.ban_chat_member(update.effective_chat.id, user.id)
+    await update.message.reply_text(f"🚫 کاربر {user.mention_html()} از گروه بن شد.", parse_mode='HTML')
+
+
+# دستور آن‌بن کردن
+async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+    
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند از بن خارج کنند.")
+        return
+
+    user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
+    if not user:
+        await update.message.reply_text("باید روی پیام کاربر ریپلای کنی.")
+        return
+
+    await context.bot.unban_chat_member(update.effective_chat.id, user.id)
+    await update.message.reply_text(f"✅ @{user.username or 'کاربر'} از بن خارج شد.")
+
+
+# حذف لینک
+async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    if not message or not message.text:
+        return
+
+    if "http://" in message.text or "https://" in message.text or "t.me" in message.text:
+        sender = await context.bot.get_chat_member(update.effective_chat.id, message.from_user.id)
+        if sender.status not in ['administrator', 'creator']:
+            await message.delete()
+            count = add_warning(update.effective_chat.id, message.from_user.id, message.from_user.username or "بدون‌نام")
+            await message.reply_text(
+                f"❌ ارسال لینک بدون هماهنگی با ادمین ممنوع است.\n⚠️ اخطار شماره {count} ثبت شد."
+            )
+
+
+# قفل شدن گروه
+async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
+        return
+
+    duration = context.args[0] if context.args else "30m"
+    match = re.match(r"(\d+)([smhd])", duration)
+    if not match:
+        await update.message.reply_text("❗ فرمت زمان نامعتبر است. مثال: 10m یا 2h")
+        return
+
+    amount, unit = int(match.group(1)), match.group(2)
+    delta = {"s": timedelta(seconds=amount), "m": timedelta(minutes=amount), "h": timedelta(hours=amount), "d": timedelta(days=amount)}[unit]
+    until_date = datetime.utcnow() + delta
+
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=False))
+    await update.message.reply_text(f"🔒 گروه برای مدت {duration} قفل شد.")
+
+
+# باز شدن گروه
+async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
+        return
+
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
+    await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
