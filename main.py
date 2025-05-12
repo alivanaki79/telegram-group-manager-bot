@@ -157,37 +157,21 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
-# خوش آمد گویی
 async def chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    old_status = update.chat_member.old_chat_member.status
     new_status = update.chat_member.new_chat_member.status
-    user = update.chat_member.from_user
+    user = update.chat_member.new_chat_member.user
     chat = update.chat_member.chat
 
     if new_status == ChatMemberStatus.MEMBER:
-        # تاریخ و زمان به وقت تهران
+        # گرفتن زمان به وقت تهران
         tehran_tz = pytz.timezone('Asia/Tehran')
         now = datetime.now(tehran_tz).strftime("%Y/%m/%d ساعت %H:%M")
 
-        if old_status == ChatMemberStatus.KICKED:
-            text = (
-                f"سلام {user.mention_html()} 👋\n"
-                f"خوش برگشتی به گروه!\n"
-                f"یادمه قبلاً بن شده بودی، لطفاً این بار رعایت کن 🙂\n\n"
-                f"🕒 تاریخ و زمان ورود: {now} 🌹"
-            )
-        elif old_status == ChatMemberStatus.LEFT:
-            text = (
-                f"سلام {user.mention_html()} 👋\n"
-                f"خوش برگشتی به گروه!\n\n"
-                f"🕒 تاریخ و زمان ورود: {now} 🌹"
-            )
-        else:
-            text = (
-                f"سلام {user.mention_html()} 👋\n"
-                f"خوش اومدی به گروه!\n\n"
-                f"🕒 تاریخ و زمان ورود: {now} 🌹"
-            )
+        text = (
+            f"سلام {user.mention_html()} 👋\n"
+            f"خوش اومدی به گروه!\n\n"
+            f"🕒 تاریخ و زمان ورود: {now} 🌹"
+        )
 
         await context.bot.send_message(
             chat_id=chat.id,
