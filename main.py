@@ -54,7 +54,7 @@ async def startup():
     application.add_handler(CommandHandler("unwarn", unwarn))
     application.add_handler(CommandHandler("ban", ban))
     application.add_handler(CommandHandler("unban", unban))
-    application.add_handler(ChatMemberHandler(chat_member_handler, ChatMemberHandler.CHAT_MEMBER))
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
@@ -157,13 +157,9 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
-async def chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    new_status = update.chat_member.new_chat_member.status
-    user = update.chat_member.new_chat_member.user
-    chat = update.chat_member.chat
-
-    if new_status == ChatMemberStatus.MEMBER:
-        # گرفتن زمان به وقت تهران
+# خوش آمد گویی
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    for user in update.message.new_chat_members:
         tehran_tz = pytz.timezone('Asia/Tehran')
         now = datetime.now(tehran_tz).strftime("%Y/%m/%d ساعت %H:%M")
 
@@ -174,7 +170,7 @@ async def chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         await context.bot.send_message(
-            chat_id=chat.id,
+            chat_id=update.effective_chat.id,
             text=text,
             parse_mode="HTML"
         )
