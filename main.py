@@ -122,12 +122,7 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.restrict_chat_member(
             chat_id=update.effective_chat.id,
             user_id=user_to_warn.id,
-            permissions=ChatPermissions(
-                can_send_messages=False,
-                can_send_media_messages=False,
-                can_send_other_messages=False,
-                can_add_web_page_previews=False
-            ),
+            permissions=ChatPermissions(can_send_messages=False),
             until_date=None  # بعداً می‌تونی مدت زمان اضافه کنی
         )
         await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
