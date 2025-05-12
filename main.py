@@ -169,12 +169,7 @@ async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.restrict_chat_member(
         chat_id=update.effective_chat.id,
         user_id=user.id,
-        permissions=ChatPermissions(
-            can_send_messages=False,
-            can_send_media_messages=False,
-            can_send_other_messages=False,
-            can_add_web_page_previews=False
-        ),
+        permissions=ChatPermissions(can_send_messages=False),
         until_date=until_date
     )
     await update.message.reply_text(f"🔇 @{user.username} برای {duration} ساکت شد.")
@@ -199,12 +194,7 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.restrict_chat_member(
         chat_id=update.effective_chat.id,
         user_id=user_to_unmute.id,
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_add_web_page_previews=True
-        )
+        permissions=ChatPermissions(can_send_messages=True)
     )
     await update.message.reply_text(f"🔓 @{user_to_unmute.username or 'کاربر'} از حالت سکوت خارج شد.")
 
