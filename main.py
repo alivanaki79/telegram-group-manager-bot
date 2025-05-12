@@ -102,6 +102,7 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return None
     
 # اخطار به کاربر
+# اخطار دادن به کاربر
 async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
     admin_ids = [admin.user.id for admin in chat_admins]
@@ -115,23 +116,23 @@ async def warn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ لطفاً آیدی یا یوزرنیم کاربر رو وارد کن یا روی پیامش ریپلای بزن.")
         return
 
-    count = add_warning(update.effective_chat.id, user_to_warn.id, user_to_warn.username or "بدون نام")
+    count = add_warning(update.effective_chat.id, user_to_warn.id, user_to_warn.username or "بدون‌نام")
 
-if count >= 3:
-    await context.bot.restrict_chat_member(
-        chat_id=update.effective_chat.id,
-        user_id=user_to_warn.id,
-        permissions=ChatPermissions(
-            can_send_messages=False,
-            can_send_media_messages=False,
-            can_send_other_messages=False,
-            can_add_web_page_previews=False
-        ),
-        until_date=None
-    )
-    await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
-else:
-    await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
+    if count >= 3:
+        await context.bot.restrict_chat_member(
+            chat_id=update.effective_chat.id,
+            user_id=user_to_warn.id,
+            permissions=ChatPermissions(
+                can_send_messages=False,
+                can_send_media_messages=False,
+                can_send_other_messages=False,
+                can_add_web_page_previews=False
+            ),
+            until_date=None  # بعداً می‌تونی مدت زمان اضافه کنی
+        )
+        await update.message.reply_text(f"🚫 @{user_to_warn.username} به دلیل دریافت ۳ اخطار، ساکت شد.")
+    else:
+        await update.message.reply_text(f"⚠️ @{user_to_warn.username} یک اخطار گرفت. مجموع اخطارها: {count}")
 
 
 # دستور ساکت شدن کاربر
