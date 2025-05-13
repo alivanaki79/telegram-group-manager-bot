@@ -382,7 +382,8 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"⏳ گروه برای مدت {time_arg} قفل خواهد ماند.")
 
-        async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
@@ -399,3 +400,4 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         can_add_web_page_previews=True
     ))
     await update.message.reply_text("🔓 گروه باز شد.")
+
