@@ -100,3 +100,33 @@ def remove_warning(group_id: int, user_id: int, count_to_remove: int = 1):
         return new_count
     return 0
 
+def update_lock_status(group_id: int, is_locked: bool, lock_until: str = None):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    data = {
+        "is_locked": is_locked,
+        "lock_until": lock_until
+    }
+    response = requests.patch(url, headers=headers, json=data)
+    return response.status_code in [200, 204]
+
+def is_group_locked(group_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=is_locked,lock_until"
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200 or not response.json():
+        return False
+
+    data = response.json()[0]
+    is_locked = data.get("is_locked", False)
+    lock_until = data.get("lock_until")
+
+    if is_locked:
+        if lock_until:
+            lock_until_dt = datetime.fromisoformat(lock_until)
+            if datetime.utcnow() > lock_until_dt:
+                # قفل منقضی شده، بازش می‌کنیم
+                update_lock_status(group_id, False, None)
+                return False
+        return True
+    return False
+
+
