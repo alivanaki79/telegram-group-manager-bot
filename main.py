@@ -162,10 +162,12 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
     for user in update.message.new_chat_members:
         tehran_tz = pytz.timezone('Asia/Tehran')
         now = datetime.now(tehran_tz).strftime("%Y/%m/%d ساعت %H:%M")
-        group_title = message.chat.title
+
+        group_title = update.effective_chat.title  # گرفتن اسم گروه
+
         text = (
-            f"سلام {user.mention_html()} 👋\n"
-            f"🎉 خوش اومدی {user.first_name} عزیز به گروه {group_title}!\n\n"
+            f"🌸 سلام {user.mention_html()} عزیز! 👋\n\n"
+            f"به گپ {group_title} خوش اومدی! 🎉\n\n"
             f"🕒 تاریخ و زمان ورود: {now} 🌹"
         )
 
@@ -174,6 +176,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text=text,
             parse_mode="HTML"
         )
+
 
 
 # دستور ساکت شدن کاربر
