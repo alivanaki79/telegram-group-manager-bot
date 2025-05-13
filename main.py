@@ -331,73 +331,68 @@ async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
-async def unlock_callback(context: ContextTypes.DEFAULT_TYPE):
-    chat_id = context.job.chat_id
-    await context.bot.set_chat_permissions(chat_id, ChatPermissions(
-        can_send_messages=True,
-        can_send_media_messages=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True
-    ))
-    await context.bot.send_message(chat_id, "🔓 قفل گروه به‌صورت خودکار باز شد.")
 
+# قفل کردن گروه با زمان
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # فقط ادمین‌ها
-    admins = await context.bot.get_chat_administrators(chat_id)
-    admin_ids = [admin.user.id for admin in admins]
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
     if user_id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
         return
 
-    # قفل گروه
-    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
-    await update.message.reply_text("🔒 گروه قفل شد.")
+    duration = context.args[0] if context.args else None
+    until_date = None
 
-    # اگر مدت زمان داده شده
-    if context.args:
-        time_arg = context.args[0]
-        match = re.match(r"^(\d+)([smhd])$", time_arg)
+    if duration:
+        match = re.match(r"(\d+)([smhd])", duration)
         if not match:
-            await update.message.reply_text("⏱ فرمت زمان نامعتبر است. مثل: 30s, 5m, 1h")
+            await update.message.reply_text("فرمت زمان نامعتبر است. مثال: 10m یا 2h")
             return
-
-        num, unit = int(match.group(1)), match.group(2)
+        amount, unit = int(match.group(1)), match.group(2)
         delta = {
-            "s": timedelta(seconds=num),
-            "m": timedelta(minutes=num),
-            "h": timedelta(hours=num),
-            "d": timedelta(days=num),
+            "s": timedelta(seconds=amount),
+            "m": timedelta(minutes=amount),
+            "h": timedelta(hours=amount),
+            "d": timedelta(days=amount)
         }[unit]
+        until_date = datetime.utcnow() + delta
 
-        # زمان‌بندی باز کردن قفل
-        context.job_queue.run_once(
-            unlock_callback,
-            when=delta,
-            chat_id=chat_id,
-            name=f"unlock_{chat_id}"
-        )
+    await context.bot.set_chat_permissions(
+        chat_id,
+        permissions=ChatPermissions(can_send_messages=False),
+        until_date=until_date  # ← این مهمه
+    )
 
-        await update.message.reply_text(f"⏳ گروه برای مدت {time_arg} قفل خواهد ماند.")
+    if until_date:
+        await update.message.reply_text(f"🔒 گروه برای {duration} قفل شد.")
+    else:
+        await update.message.reply_text("🔒 گروه بدون محدودیت زمانی قفل شد.")
 
 
+
+# باز کردن قفل گروه
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    admins = await context.bot.get_chat_administrators(chat_id)
-    admin_ids = [admin.user.id for admin in admins]
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
     if user_id not in admin_ids:
-        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل را بردارند.")
         return
 
-    await context.bot.set_chat_permissions(chat_id, ChatPermissions(
-        can_send_messages=True,
-        can_send_media_messages=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True
-    ))
-    await update.message.reply_text("🔓 گروه باز شد.")
-
+    await context.bot.set_chat_permissions(
+        chat_id,
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True
+        )
+    )
+    await update.message.reply_text("🔓 قفل گروه برداشته شد.")
