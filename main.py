@@ -165,7 +165,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         text = (
             f"سلام {user.mention_html()} 👋\n"
-            f"خوش اومدی به گروه!\n\n"
+            f"🎉 خوش اومدی {user.first_name} عزیز به گروه {group_title}!\n\n"
             f"🕒 تاریخ و زمان ورود: {now} 🌹"
         )
 
