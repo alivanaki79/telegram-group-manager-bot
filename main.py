@@ -341,23 +341,27 @@ async def unlock_callback(context: ContextTypes.DEFAULT_TYPE):
     ))
     await context.bot.send_message(chat_id, "🔓 قفل گروه به‌صورت خودکار باز شد.")
 
-# قفل کردن گروه با امکان تعیین زمان
+# قفل کردن گروه با زمان اختیاری
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
-    admin_ids = [admin.user.id for admin in chat_admins]
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
 
-    if update.effective_user.id not in admin_ids:
+    admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in admins]
+
+    if user_id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
         return
 
-    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=False))
-    await update.message.reply_text("🔒 گروه قفل شد. کاربران نمی‌توانند پیام ارسال کنند.")
+    # اعمال قفل
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
+    await update.message.reply_text("🔒 گروه قفل شد.")
 
-    # بررسی وجود زمان مثل /lock 10m
+    # اگر مدت زمان داده شده
     if context.args:
         match = re.match(r"(\d+)([smhd])", context.args[0])
         if not match:
-            await update.message.reply_text("⏱ فرمت زمان نامعتبر است. از یکی از این فرمت‌ها استفاده کنید: 10s, 5m, 1h, 1d")
+            await update.message.reply_text("⏱ فرمت زمان نامعتبر است. مثل: 30s, 5m, 1h")
             return
 
         amount, unit = int(match.group(1)), match.group(2)
@@ -368,20 +372,31 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "d": timedelta(days=amount)
         }[unit]
 
+        # زمان‌بندی باز شدن قفل
         context.job_queue.run_once(
             unlock_callback,
             when=delta,
-            chat_id=update.effective_chat.id,
+            chat_id=chat_id,
+            name=f"unlock_{chat_id}"
         )
-
         await update.message.reply_text(f"⏳ گروه برای مدت {context.args[0]} قفل خواهد ماند.")
 
-# 🔓 باز کردن دستی گروه
+# باز کردن دستی
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
-    if issuer.status not in ['administrator', 'creator']:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in admins]
+
+    if user_id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
         return
 
-    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(
+        can_send_messages=True,
+        can_send_media_messages=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True
+    ))
     await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
