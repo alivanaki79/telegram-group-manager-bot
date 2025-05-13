@@ -1,3 +1,4 @@
+
 import os
 import uvicorn
 import re
@@ -47,7 +48,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("warn", warn))
     application.add_handler(CommandHandler("mute", mute))
@@ -59,7 +59,9 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
-
+    application.add_handler(CommandHandler("cancelnightlock", cancel_night_lock))
+    application.add_handler(CommandHandler("enablenightlock", enable_night_lock))
+    job_queue = application.job_queue
     
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
@@ -232,25 +234,31 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند سکوت را بردارند.")
         return
 
+    # باید روی پیام کاربر ریپلای زده شود
     user_to_unmute = update.message.reply_to_message.from_user if update.message.reply_to_message else None
     if not user_to_unmute:
         await update.message.reply_text("لطفاً روی پیام کاربر ریپلای بزنید.")
         return
 
-    permissions=ChatPermissions(
-        can_send_messages=True,
-        can_send_audios=True,
-        can_send_documents=True,
-        can_send_photos=True,
-        can_send_videos=True,
-        can_send_video_notes=True,
-        can_send_voice_notes=True,
-        can_send_polls=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True,
-        can_send_media_messages=True  # استیکر و گیف
-)
+    await context.bot.restrict_chat_member(
+        chat_id=update.effective_chat.id,
+        user_id=user_to_unmute.id,
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+            can_send_polls=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True,
+            can_send_media_messages=True  # استیکر و گیف
+        )
+    )
     await update.message.reply_text(f"🔓 @{user_to_unmute.username or 'کاربر'} از حالت سکوت خارج شد.")
+
 
 # حذف همه اخطارها
 async def unwarn(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -334,68 +342,96 @@ async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
-
-# قفل کردن گروه با زمان
+# 🔒 قفل دستی با زمان مشخص
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    chat_admins = await context.bot.get_chat_administrators(chat_id)
-    admin_ids = [admin.user.id for admin in chat_admins]
-
-    if user_id not in admin_ids:
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
         return
 
-    duration = context.args[0] if context.args else None
-    until_date = None
-
-    if duration:
-        match = re.match(r"(\d+)([smhd])", duration)
-        if not match:
-            await update.message.reply_text("فرمت زمان نامعتبر است. مثال: 10m یا 2h")
-            return
-        amount, unit = int(match.group(1)), match.group(2)
-        delta = {
-            "s": timedelta(seconds=amount),
-            "m": timedelta(minutes=amount),
-            "h": timedelta(hours=amount),
-            "d": timedelta(days=amount)
-        }[unit]
-        until_date = datetime.utcnow() + delta
-
-    await context.bot.set_chat_permissions(
-        chat_id,
-        permissions=ChatPermissions(can_send_messages=False),
-        until_date=until_date  # ← این مهمه
-    )
-
-    if until_date:
-        await update.message.reply_text(f"🔒 گروه برای {duration} قفل شد.")
-    else:
-        await update.message.reply_text("🔒 گروه بدون محدودیت زمانی قفل شد.")
-
-
-
-# باز کردن قفل گروه
-async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    chat_admins = await context.bot.get_chat_administrators(chat_id)
-    admin_ids = [admin.user.id for admin in chat_admins]
-
-    if user_id not in admin_ids:
-        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل را بردارند.")
+    duration = context.args[0] if context.args else "30m"
+    match = re.match(r"(\d+)([smhd])", duration)
+    if not match:
+        await update.message.reply_text("❗ فرمت زمان نامعتبر است. مثال: 10m یا 2h")
         return
 
-    await context.bot.set_chat_permissions(
-        chat_id,
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_add_web_page_previews=True
-        )
+    amount, unit = int(match.group(1)), match.group(2)
+    delta = {"s": timedelta(seconds=amount), "m": timedelta(minutes=amount), "h": timedelta(hours=amount), "d": timedelta(days=amount)}[unit]
+
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=False))
+    await update.message.reply_text(f"🔒 گروه برای مدت {duration} قفل شد.")
+
+    context.job_queue.run_once(unlock_group, delta, data=update.effective_chat.id)
+
+# 🔓 باز کردن دستی گروه
+async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
+        return
+
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
+    await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
+
+# 🔓 باز شدن خودکار
+async def unlock_group(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.data
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=True))
+    await context.bot.send_message(chat_id=chat_id, text="🔓 گروه به‌طور خودکار باز شد.")
+
+# 🌙 قفل شبانه خودکار (۲ تا ۷ صبح)
+async def night_lock_job(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.data
+    bot_data = context.application.bot_data
+
+    if bot_data.get(f"nightlock_disabled_{chat_id}", False):
+        return  # قفل شبانه غیرفعال شده
+
+    await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
+    await context.bot.send_message(chat_id=chat_id, text="🌙 گروه به‌طور خودکار برای استراحت شبانه (۲ تا ۷ صبح) قفل شد.")
+
+    now_tehran = datetime.now(pytz.timezone("Asia/Tehran"))
+    unlock_time = now_tehran.replace(hour=7, minute=0, second=0, microsecond=0)
+    if now_tehran.hour >= 7:
+        unlock_time += timedelta(days=1)
+    delta = (unlock_time - now_tehran).total_seconds()
+
+    context.job_queue.run_once(unlock_group, when=delta, data=chat_id)
+
+# 🕒 برنامه‌ریزی اجرای روزانه قفل شبانه
+def schedule_night_lock(job_queue: JobQueue, chat_id: int):
+    tehran = pytz.timezone("Asia/Tehran")
+    now = datetime.now(tehran)
+    next_2am = now.replace(hour=2, minute=0, second=0, microsecond=0)
+    if now.hour >= 2:
+        next_2am += timedelta(days=1)
+    delay = (next_2am - now).total_seconds()
+
+    job_queue.run_repeating(
+        night_lock_job,
+        interval=timedelta(days=1),
+        first=delay,
+        data=chat_id,
+        name=f"nightlock_{chat_id}"
     )
-    await update.message.reply_text("🔓 قفل گروه برداشته شد.")
+
+# ❎ لغو قفل شبانه توسط ادمین (تا زمانی که دوباره فعال نشه)
+async def cancel_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    issuer = await context.bot.get_chat_member(chat_id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را لغو کنند.")
+        return
+
+    context.application.bot_data[f"nightlock_disabled_{chat_id}"] = True
+    await update.message.reply_text("❎ قفل شبانه برای این گروه غیرفعال شد.")
+
+# ✅ فعال‌سازی مجدد قفل شبانه
+async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    issuer = await context.bot.get_chat_member(chat_id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را فعال کنند.")
+        return
+
+    context.application.bot_data[f"nightlock_disabled_{chat_id}"] = False
