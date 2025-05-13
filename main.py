@@ -253,10 +253,10 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
             can_send_voice_notes=True,
             can_send_polls=True,
             can_send_other_messages=True,
-            can_add_web_page_previews=True,
-            can_send_media_messages=True  # استیکر و گیف
-        )
+            can_add_web_page_previews=True
+)
     )
+
     await update.message.reply_text(f"🔓 @{user_to_unmute.username or 'کاربر'} از حالت سکوت خارج شد.")
 
 
