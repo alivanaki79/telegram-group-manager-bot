@@ -237,16 +237,19 @@ async def unmute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("لطفاً روی پیام کاربر ریپلای بزنید.")
         return
 
-    await context.bot.restrict_chat_member(
-        chat_id=update.effective_chat.id,
-        user_id=user_to_unmute.id,
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_add_web_page_previews=True
-        )
-    )
+    permissions=ChatPermissions(
+        can_send_messages=True,
+        can_send_audios=True,
+        can_send_documents=True,
+        can_send_photos=True,
+        can_send_videos=True,
+        can_send_video_notes=True,
+        can_send_voice_notes=True,
+        can_send_polls=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True,
+        can_send_media_messages=True  # استیکر و گیف
+)
     await update.message.reply_text(f"🔓 @{user_to_unmute.username or 'کاربر'} از حالت سکوت خارج شد.")
 
 # حذف همه اخطارها
