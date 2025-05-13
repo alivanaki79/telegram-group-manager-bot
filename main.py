@@ -353,11 +353,11 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
         return
 
-    # اعمال قفل
+    # قفل گروه
     await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
     await update.message.reply_text("🔒 گروه قفل شد.")
 
-    # اگر مدت زمان داده شده
+    # زمان‌دار بودن
     if context.args:
         match = re.match(r"(\d+)([smhd])", context.args[0])
         if not match:
@@ -372,31 +372,24 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "d": timedelta(days=amount)
         }[unit]
 
-        # زمان‌بندی باز شدن قفل
-        context.job_queue.run_once(
+        # استفاده از application.job_queue به جای context.job_queue
+        global application  # ← این خط ضروریه
+        application.job_queue.run_once(
             unlock_callback,
             when=delta,
             chat_id=chat_id,
             name=f"unlock_{chat_id}"
         )
+
         await update.message.reply_text(f"⏳ گروه برای مدت {context.args[0]} قفل خواهد ماند.")
 
-# باز کردن دستی
+
+# 🔓 باز کردن دستی گروه
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    admins = await context.bot.get_chat_administrators(chat_id)
-    admin_ids = [admin.user.id for admin in admins]
-
-    if user_id not in admin_ids:
+    issuer = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    if issuer.status not in ['administrator', 'creator']:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
         return
 
-    await context.bot.set_chat_permissions(chat_id, ChatPermissions(
-        can_send_messages=True,
-        can_send_media_messages=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True
-    ))
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
     await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
