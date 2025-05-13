@@ -330,6 +330,7 @@ async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ ارسال لینک بدون هماهنگی با ادمین ممنوع است.\n⚠️ اخطار شماره {count} ثبت شد."
             )
 
+
 async def unlock_callback(context: ContextTypes.DEFAULT_TYPE):
     chat_id = context.job.chat_id
     await context.bot.set_chat_permissions(chat_id, ChatPermissions(
@@ -341,12 +342,10 @@ async def unlock_callback(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id, "🔓 قفل گروه به‌صورت خودکار باز شد.")
 
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global application  # تا به job_queue دسترسی داشته باشیم
-
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # بررسی ادمین بودن
+    # فقط ادمین‌ها
     admins = await context.bot.get_chat_administrators(chat_id)
     admin_ids = [admin.user.id for admin in admins]
     if user_id not in admin_ids:
@@ -357,37 +356,36 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
     await update.message.reply_text("🔒 گروه قفل شد.")
 
-    # اگر زمان هم داده شده
+    # اگر مدت زمان داده شده
     if context.args:
-        match = re.match(r"^(\d+)([smhd])$", context.args[0])
+        time_arg = context.args[0]
+        match = re.match(r"^(\d+)([smhd])$", time_arg)
         if not match:
-            await update.message.reply_text("⏱ فرمت زمان نامعتبر است. از فرمت‌های 30s، 5m، 1h استفاده کن.")
+            await update.message.reply_text("⏱ فرمت زمان نامعتبر است. مثل: 30s, 5m, 1h")
             return
 
-        number, unit = int(match.group(1)), match.group(2)
+        num, unit = int(match.group(1)), match.group(2)
         delta = {
-            "s": timedelta(seconds=number),
-            "m": timedelta(minutes=number),
-            "h": timedelta(hours=number),
-            "d": timedelta(days=number)
+            "s": timedelta(seconds=num),
+            "m": timedelta(minutes=num),
+            "h": timedelta(hours=num),
+            "d": timedelta(days=num),
         }[unit]
 
-        # برنامه‌ریزی باز شدن قفل
-        application.job_queue.run_once(
+        # زمان‌بندی باز کردن قفل
+        context.job_queue.run_once(
             unlock_callback,
             when=delta,
             chat_id=chat_id,
             name=f"unlock_{chat_id}"
         )
 
-        await update.message.reply_text(f"⏳ گروه برای مدت {context.args[0]} قفل خواهد ماند.")
+        await update.message.reply_text(f"⏳ گروه برای مدت {time_arg} قفل خواهد ماند.")
 
-
-async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # بررسی ادمین بودن
     admins = await context.bot.get_chat_administrators(chat_id)
     admin_ids = [admin.user.id for admin in admins]
     if user_id not in admin_ids:
@@ -400,4 +398,4 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         can_send_other_messages=True,
         can_add_web_page_previews=True
     ))
-    await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
+    await update.message.reply_text("🔓 گروه باز شد.")
