@@ -47,6 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("warn", warn))
     application.add_handler(CommandHandler("mute", mute))
