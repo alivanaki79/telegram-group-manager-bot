@@ -370,7 +370,20 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را باز کنند.")
         return
 
-    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(can_send_messages=True))
+    await context.bot.set_chat_permissions(update.effective_chat.id, ChatPermissions(
+            can_send_messages=True,
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+            can_send_polls=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True
+            ) 
+    )
+    
     await update.message.reply_text("🔓 گروه باز شد و همه می‌توانند صحبت کنند.")
 
 # 🔓 باز شدن خودکار
@@ -415,6 +428,7 @@ def schedule_night_lock(job_queue: JobQueue, chat_id: int):
         name=f"nightlock_{chat_id}"
     )
 
+
 # ❎ لغو قفل شبانه توسط ادمین (تا زمانی که دوباره فعال نشه)
 async def cancel_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -426,6 +440,7 @@ async def cancel_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.bot_data[f"nightlock_disabled_{chat_id}"] = True
     await update.message.reply_text("❎ قفل شبانه برای این گروه غیرفعال شد.")
 
+
 # ✅ فعال‌سازی مجدد قفل شبانه
 async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -435,3 +450,4 @@ async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     context.application.bot_data[f"nightlock_disabled_{chat_id}"] = False
+    await update.message.reply_text("✅ قفل شبانه برای این گروه فعال شد.")
