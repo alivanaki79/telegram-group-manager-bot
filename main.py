@@ -70,8 +70,8 @@ async def startup():
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
     application.add_handler(CommandHandler("nightlockoff", disable_night_lock))
-    application.add_handler(CommandHandler("lockstatus", update_lock_status))
-    
+    application.add_handler(CommandHandler("nightlockstatus", nightlock_status))
+
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
@@ -649,3 +649,43 @@ async def periodic_check():
         await check_and_apply_night_lock(application.bot)
         await check_and_release_night_lock(application.bot)
         await asyncio.sleep(60)
+
+
+def to_tehran_time(utc_str):
+    if not utc_str:
+        return "نامشخص"
+    utc_time = datetime.fromisoformat(utc_str)
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    return utc_time.astimezone(tehran_tz).strftime('%Y-%m-%d %H:%M')
+
+async def nightlock_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+
+    # دریافت لیست ادمین‌ها
+    admins = await context.bot.get_chat_administrators(chat.id)
+    admin_ids = [admin.user.id for admin in admins]
+
+    # چک اینکه کاربر ادمین هست یا نه
+    if user.id not in admin_ids:
+        await update.message.reply_text("⛔ فقط مدیران گروه می‌توانند این دستور را اجرا کنند.")
+        return
+
+    group_id = chat.id
+    info = get_night_lock_status(group_id)
+
+    if not info:
+        await update.message.reply_text("❌ خطا در دریافت وضعیت قفل شبانه.")
+        return
+
+    is_active = info.get("night_lock_active", False)
+    is_locked = info.get("is_locked", False)
+    disabled_until = to_tehran_time(info.get("night_lock_disabled_until"))
+    
+    status_text = (
+        f"🛡 وضعیت قفل شبانه:\n"
+        f"- فعال است؟ {'✅ بله' if is_active else '❌ خیر'}\n"
+        f"- در حال حاضر قفل شده؟ {'🔒 بله' if is_locked else '🔓 خیر'}\n"
+        f"- غیرفعال تا: {disabled_until}"
+    )
+    await update.message.reply_text(status_text)
