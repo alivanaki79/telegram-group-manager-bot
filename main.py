@@ -452,10 +452,32 @@ async def check_and_unlock_expired_groups(bot: Bot):
                 # بروزرسانی دیتابیس
                 update_lock_status(group_id, False, None)
 
+async def check_and_warn_night_lock(bot: Bot):
+    now = datetime.utcnow()
+    if now.hour == 22 and now.minute == 15:  # ساعت 01:45 به وقت ایران
+        print("⏰ در حال ارسال هشدار قفل شبانه...")
+
+        url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active"
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            return
+
+        for group in response.json():
+            if group.get("night_lock_active", False):
+                try:
+                    await bot.send_message(
+                        chat_id=group["group_id"],
+                        text="🔔 یادآوری: قفل شبانه تا ۱۵ دقیقه دیگر فعال می‌شود (ساعت ۲ بامداد ایران). در صورت نیاز می‌توانید آن را غیرفعال کنید با دستور /disable_nightlock"
+                    )
+                except Exception as e:
+                    print(f"خطا در ارسال هشدار به گروه {group['group_id']}: {e}")
+
+
 # ✅ سپس بلافاصله بعدش:
 async def periodic_check():
     while True:
         print("🔁 در حال بررسی گروه‌های قفل‌شده...")
+        await check_and_warn_night_lock(application.bot)  # هشدار
         await check_and_unlock_expired_groups(application.bot)
         await asyncio.sleep(60)
 
