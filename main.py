@@ -494,137 +494,121 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_and_apply_night_lock(bot: Bot):
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
+
     if not (2 <= now_tehran.hour < 7):
         return
 
-    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active,night_lock_disabled_until,is_locked,last_night_lock_applied"
-    res = requests.get(url, headers=headers)
-    if res.status_code != 200:
+    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active,night_lock_disabled_until,is_locked,last_night_lock_applied,lock_until"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
         print("❌ خطا در واکشی گروه‌ها")
         return
 
-    for group in res.json():
-        gid = group["group_id"]
-        if not group.get("night_lock_active") or group.get("is_locked"):
+    for group in response.json():
+        group_id = group["group_id"]
+        active = group.get("night_lock_active", False)
+        is_locked = group.get("is_locked", False)
+        disabled_until = group.get("night_lock_disabled_until")
+        last_applied = group.get("last_night_lock_applied")
+        lock_until = group.get("lock_until")  # بررسی قفل دستی
+
+        # اگر قفل شبانه غیرفعاله یا الان قفل شده (دستی یا شبانه)، رد کن
+        if not active or is_locked:
             continue
 
-        disabled_until = group.get("night_lock_disabled_until")
+        # اگر قفل دستی فعاله، قفل شبانه اعمال نشه
+        if lock_until:
+            try:
+                lock_until_dt = datetime.fromisoformat(lock_until)
+                if datetime.utcnow() < lock_until_dt:
+                    continue
+            except:
+                pass
+
         if disabled_until:
             try:
-                if now_utc < datetime.fromisoformat(disabled_until):
+                disabled_dt = datetime.fromisoformat(disabled_until)
+                if now_utc < disabled_dt:
                     continue
-            except: pass
+            except:
+                pass
 
-        last_applied = group.get("last_night_lock_applied")
         if last_applied:
             try:
-                if datetime.fromisoformat(last_applied).date() == now_tehran.date():
+                last_dt = datetime.fromisoformat(last_applied)
+                if last_dt.date() == now_tehran.date():
                     continue
-            except: pass
+            except:
+                pass
 
         try:
-            await bot.set_chat_permissions(gid, ChatPermissions(can_send_messages=False))
-            await bot.send_message(gid, "🌙 قفل شبانه فعال شد.")
-            update_lock_status(gid, True)
-            update_last_night_lock_applied(gid)
+            await bot.set_chat_permissions(chat_id=group_id, permissions=ChatPermissions(can_send_messages=False))
+            await bot.send_message(chat_id=group_id, text="🌙 قفل شبانه فعال شد.")
+            update_lock_status(group_id, True)  # فقط پرچم is_locked
+            update_last_night_lock_applied(group_id)
         except Exception as e:
-            print(f"❌ خطا در قفل گروه {gid}: {e}")
+            print(f"❌ خطا در قفل گروه {group_id}: {e}")
 
 async def check_and_release_night_lock(bot: Bot):
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
+
     if now_tehran.hour != 7:
         return
 
-    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,is_locked,last_night_lock_released"
-    res = requests.get(url, headers=headers)
-    if res.status_code != 200:
+    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,is_locked,last_night_lock_released,lock_until"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
         return
 
-    for group in res.json():
-        gid = group["group_id"]
-        if not group.get("is_locked"):
+    for group in response.json():
+        group_id = group["group_id"]
+        is_locked = group.get("is_locked", False)
+        last_released = group.get("last_night_lock_released")
+        lock_until = group.get("lock_until")  # بررسی قفل دستی
+
+        # اگر قفل فعال نیست، بیخیال
+        if not is_locked:
             continue
 
-        last_released = group.get("last_night_lock_released")
+        # اگر قفل دستی هنوز فعاله، نباید باز کنیم
+        if lock_until:
+            try:
+                lock_until_dt = datetime.fromisoformat(lock_until)
+                if datetime.utcnow() < lock_until_dt:
+                    continue
+            except:
+                pass
+
+        # اگر همین امروز باز شده بود قبلاً
         if last_released:
             try:
-                if datetime.fromisoformat(last_released).date() == now_tehran.date():
+                last_dt = datetime.fromisoformat(last_released)
+                if last_dt.date() == now_tehran.date():
                     continue
-            except: pass
+            except:
+                pass
 
         try:
-            await bot.set_chat_permissions(gid, ChatPermissions(can_send_messages=True))
-            await bot.send_message(gid, "🔓 قفل شبانه به پایان رسید.")
-            update_lock_status(gid, False)
-            update_last_night_lock_released(gid)
-        except Exception as e:
-            print(f"❌ خطا در باز کردن گروه {gid}: {e}")
-
-async def send_night_lock_warning(bot: Bot):
-    now = datetime.now(timezone.utc).astimezone(TEHRAN)
-    if now.hour != 1 or now.minute != 50:
-        return
-
-    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active"
-    res = requests.get(url, headers=headers)
-    if res.status_code != 200:
-        return
-
-    for group in res.json():
-        if group.get("night_lock_active"):
-            try:
-                await bot.send_message(
-                    chat_id=group["group_id"],
-                    text="⏰ قفل شبانه تا ۱۰ دقیقه دیگر فعال می‌شود.\nبرای غیرفعال کردن امشب، ادمین‌ها می‌توانند بزنند:\n`/disable_nightlock`",
-                    parse_mode="Markdown"
+            await bot.set_chat_permissions(
+                chat_id=group_id,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_audios=True,
+                    can_send_documents=True,
+                    can_send_photos=True,
+                    can_send_videos=True,
+                    can_send_video_notes=True,
+                    can_send_voice_notes=True,
+                    can_send_polls=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True
                 )
-            except: pass
-
-async def disable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    admins = await context.bot.get_chat_administrators(chat_id)
-    if user_id not in [admin.user.id for admin in admins]:
-        return await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را غیرفعال کنند.")
-
-    until = datetime.now(timezone.utc) + timedelta(hours=6)
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}"
-    res = requests.patch(url, headers=headers, json={"night_lock_disabled_until": until.isoformat()})
-    if res.status_code in [200, 204]:
-        await update.message.reply_text("✅ قفل شبانه برای امشب غیرفعال شد.")
-    else:
-        await update.message.reply_text("❌ خطا در غیرفعال‌سازی قفل شبانه.")
-
-async def nightlock_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    admins = await context.bot.get_chat_administrators(chat_id)
-    if user_id not in [admin.user.id for admin in admins]:
-        return await update.message.reply_text("⛔ فقط مدیران گروه می‌توانند این دستور را اجرا کنند.")
-
-    info = get_night_lock_status(chat_id)
-    if not info:
-        return await update.message.reply_text("❌ خطا در دریافت وضعیت قفل شبانه.")
-
-    def to_tehran(utc_str):
-        if not utc_str: return "نامشخص"
-        return datetime.fromisoformat(utc_str).astimezone(TEHRAN).strftime('%Y-%m-%d %H:%M')
-
-    text = (
-        f"🛡 وضعیت قفل شبانه:\n"
-        f"- فعال است؟ {'✅' if info['night_lock_active'] else '❌'}\n"
-        f"- قفل شده؟ {'🔒' if info['is_locked'] else '🔓'}\n"
-        f"- غیرفعال تا: {to_tehran(info.get('night_lock_disabled_until'))}"
-    )
-    await update.message.reply_text(text)
-
-async def periodic_check():
-    while True:
-        print("🔁 periodic check...")
-        await send_night_lock_warning(application.bot)
-        await check_and_apply_night_lock(application.bot)
-        await check_and_release_night_lock(application.bot)
-        await asyncio.sleep(60)
+            )
+            await bot.send_message(chat_id=group_id, text="🔓 قفل شبانه به پایان رسید.")
+            update_lock_status(group_id, False, None)
+            update_last_night_lock_released(group_id)
+        except Exception as e:
+            print(f"❌ خطا در باز کردن گروه {group_id}: {e}")
