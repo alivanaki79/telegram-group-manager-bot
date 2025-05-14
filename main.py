@@ -479,6 +479,8 @@ async def periodic_check():
         print("🔁 در حال بررسی گروه‌های قفل‌شده...")
         await check_and_warn_night_lock(application.bot)  # هشدار
         await check_and_unlock_expired_groups(application.bot)
+        await check_and_apply_night_lock(application.bot)  # ✅ قفل شبانه
+        await check_and_release_night_lock(application.bot)  # ✅ باز کردن صبح
         await asyncio.sleep(60)
 
 
