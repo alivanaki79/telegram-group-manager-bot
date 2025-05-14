@@ -69,8 +69,9 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
-    application.add_handler(CommandHandler("disable_nightlock", disable_night_lock))
-    application.add_handler(CommandHandler("nightlock_status", nightlock_status))
+    application.add_handler(CommandHandler("enablenightlock", enable_night_lock))
+    application.add_handler(CommandHandler("disablenightlock", disable_night_lock))
+    application.add_handler(CommandHandler("nightlockstatus", nightlock_status))
 
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
@@ -612,6 +613,27 @@ async def check_and_release_night_lock(bot: Bot):
             update_last_night_lock_released(group_id)
         except Exception as e:
             print(f"❌ خطا در باز کردن گروه {group_id}: {e}")
+
+
+async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    # بررسی اینکه فقط ادمین بتونه اجرا کنه
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+    if update.effective_user.id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را فعال کنند.")
+        return
+
+    # فعال‌سازی در دیتابیس
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}"
+    data = {"night_lock_active": True}
+    response = requests.patch(url, headers=headers, json=data)
+
+    if response.status_code in [200, 204]:
+        await update.message.reply_text("✅ قفل شبانه فعال شد.")
+    else:
+        await update.message.reply_text("❌ خطا در فعال‌سازی قفل شبانه.")
 
 
 async def disable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
