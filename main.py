@@ -17,13 +17,13 @@ from telegram.ext import (
 from config import BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY
 from database import add_group, get_subscription_status, add_warning, remove_warning, get_warning_count, update_lock_status, is_group_locked, get_night_lock_status, update_night_lock, update_last_night_lock_applied, update_last_night_lock_released
 
-TEHRAN = pytz_timezone("Asia/Tehran")
-
 headers = {
     "apikey": SUPABASE_API_KEY,
     "Authorization": f"Bearer {SUPABASE_API_KEY}",
     "Content-Type": "application/json",
 }
+
+TEHRAN = pytz_timezone("Asia/Tehran")
 
 app = FastAPI()
 application: Application = None  # برای مدیریت بات تلگرام
