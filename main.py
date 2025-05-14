@@ -49,13 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ اشتراک این گروه تا {days} روز دیگر منقضی می‌شود.")
     else:
         await update.message.reply_text(f"📅 اشتراک این گروه تا {days} روز دیگر فعال است.")
-
-# ✅ تابع بررسی دوره‌ای
-async def periodic_check():
-    while True:
-        print("🔁 در حال بررسی گروه‌های قفل‌شده...")
-        await check_and_unlock_expired_groups(application.bot)
-        await asyncio.sleep(60)
+        
 
 # رویداد شروع برنامه
 @app.on_event("startup")
@@ -406,7 +400,8 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🔒 گروه قفل شد{duration_text}.")
 
-async def check_and_unlock_expired_groups(application: Application):
+
+async def check_and_unlock_expired_groups(bot: Bot):
     url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,lock_until,is_locked"
     response = requests.get(url, headers=headers)
 
@@ -422,7 +417,7 @@ async def check_and_unlock_expired_groups(application: Application):
             lock_until_dt = datetime.fromisoformat(lock_until)
             if datetime.now(timezone.utc) > lock_until_dt:
                 # باز کردن گروه
-                await application.bot.set_chat_permissions(
+                await bot.set_chat_permissions(
                     chat_id=group_id,
                     permissions=ChatPermissions(
                         can_send_messages=True,
@@ -442,7 +437,7 @@ async def check_and_unlock_expired_groups(application: Application):
                 
                 # پیام باز شدن خودکار
                 try:
-                    await application.bot.send_message(
+                    await bot.send_message(
                         chat_id=group_id,
                         text="🔓 قفل گروه به‌صورت خودکار باز شد."
                     )
@@ -451,6 +446,13 @@ async def check_and_unlock_expired_groups(application: Application):
 
                 # بروزرسانی دیتابیس
                 update_lock_status(group_id, False, None)
+
+# ✅ سپس بلافاصله بعدش:
+async def periodic_check():
+    while True:
+        print("🔁 در حال بررسی گروه‌های قفل‌شده...")
+        await check_and_unlock_expired_groups(application.bot)
+        await asyncio.sleep(60)
 
 
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
