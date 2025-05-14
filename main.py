@@ -513,7 +513,7 @@ async def lock_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-    await update.message.reply_text(status_text
+    await update.message.reply_text(status_text)
 
 
 async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
