@@ -3,7 +3,7 @@ import os
 import uvicorn
 import re
 import requests
-from datetime import timedelta, datetime, time
+from datetime import timedelta, datetime, time, timezone
 import pytz
 
 from fastapi import FastAPI, Request
@@ -420,7 +420,7 @@ async def check_and_unlock_expired_groups(application: Application):
 
         if is_locked and lock_until:
             lock_until_dt = datetime.fromisoformat(lock_until)
-            if datetime.utcnow() > lock_until_dt:
+            if datetime.now(timezone.utc) > lock_until_dt:
                 # باز کردن گروه
                 await application.bot.set_chat_permissions(
                     chat_id=group_id,
