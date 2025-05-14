@@ -16,6 +16,12 @@ from telegram.ext import (
 from config import BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY
 from database import add_group, get_subscription_status, add_warning, remove_warning, get_warning_count, update_lock_status, is_group_locked
 
+headers = {
+    "apikey": SUPABASE_API_KEY,
+    "Authorization": f"Bearer {SUPABASE_API_KEY}",
+    "Content-Type": "application/json",
+}
+
 night_lock_disabled_groups = set()
 app = FastAPI()
 application: Application = None  # برای مدیریت بات تلگرام
