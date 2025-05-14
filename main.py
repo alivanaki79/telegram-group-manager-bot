@@ -69,8 +69,8 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
-    application.add_handler(CommandHandler("nightlockoff", disable_night_lock))
-    application.add_handler(CommandHandler("nightlockstatus", nightlock_status))
+    application.add_handler(CommandHandler("disable_nightlock", disable_night_lock))
+    application.add_handler(CommandHandler("nightlock_status", nightlock_status))
 
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
