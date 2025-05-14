@@ -1,6 +1,4 @@
-from scheduler import check_and_unlock_expired_groups  # فایل بالا
 import asyncio
-
 import os
 import uvicorn
 import re
@@ -470,7 +468,7 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # به‌روزرسانی وضعیت قفل‌شدن
-    update_lock_status(update.effective_chat.id, False)
-
+    update_lock_status(update.effective_chat.id, False, None)
+    
     await update.message.reply_text("🔓 گروه باز شد.")
 
