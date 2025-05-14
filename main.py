@@ -67,8 +67,8 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
-    application.add_handler(CommandHandler("nightlockon", night_lock_on))
-    application.add_handler(CommandHandler("nightlockoff", night_lock_off))
+    application.add_handler(CommandHandler("nightlockon", enable_night_lock))
+    application.add_handler(CommandHandler("nightlockoff", disable_night_lock_temporarily))
     application.add_handler(CommandHandler("lockstatus", lock_status))
     
     # ست کردن وبهوک در تلگرام
@@ -536,6 +536,31 @@ async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Failed to enable night lock.")
 
+
+async def disable_night_lock_temporarily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    admins = await context.bot.get_chat_administrators(chat_id)
+    if user_id not in [admin.user.id for admin in admins]:
+        return await update.message.reply_text("❌ Only admins can disable night lock temporarily.")
+
+    tomorrow = datetime.now(timezone.utc).replace(hour=6, minute=0, second=0, microsecond=0)
+    if tomorrow < datetime.now(timezone.utc):
+        tomorrow += timedelta(days=1)
+
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}"
+    data = {
+        "night_lock_disabled_until": tomorrow.isoformat()
+    }
+    response = requests.patch(url, headers=headers, json=data)
+
+    if response.status_code in [200, 204]:
+        await update.message.reply_text("☕ Night lock is disabled until 6 AM.")
+    else:
+        await update.message.reply_text("❌ Failed to disable night lock.")
+
+
 async def check_and_apply_night_lock(bot: Bot):
     url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active,night_lock_disabled_until,is_locked"
     response = requests.get(url, headers=headers)
@@ -583,3 +608,5 @@ async def periodic_check():
         await check_and_unlock_expired_groups(application.bot)
         await check_and_apply_night_lock(application.bot)
         await asyncio.sleep(60)
+
+
