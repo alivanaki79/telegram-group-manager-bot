@@ -1,3 +1,7 @@
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import asyncio
+
 import os
 import uvicorn
 import re
@@ -337,32 +341,99 @@ async def link_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ ارسال لینک بدون هماهنگی با ادمین ممنوع است.\n⚠️ اخطار شماره {count} ثبت شد."
             )
 
+
+# قفل گروه
 async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_admins = await context.bot.get_chat_administrators(update.effective_chat.id)
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
     admin_ids = [admin.user.id for admin in chat_admins]
 
-    if update.effective_user.id not in admin_ids:
+    if user_id not in admin_ids:
         await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند گروه را قفل کنند.")
         return
 
-    # بررسی اینکه آیا مدت زمان مشخص شده
     duration = context.args[0] if context.args else None
     until = None
-    if duration and duration.isdigit():
-        until = datetime.utcnow() + timedelta(minutes=int(duration))
 
-    # اعمال محدودیت روی ارسال پیام
+    if duration:
+        match = re.match(r"^(\d+)([mhd])$", duration)
+        if match:
+            value, unit = int(match.group(1)), match.group(2)
+            if unit == 'm':
+                until = datetime.utcnow() + timedelta(minutes=value)
+            elif unit == 'h':
+                until = datetime.utcnow() + timedelta(hours=value)
+            elif unit == 'd':
+                until = datetime.utcnow() + timedelta(days=value)
+        else:
+            await update.message.reply_text("❌ فرمت زمان اشتباه است. مثل 10m یا 2h یا 1d")
+            return
+
+    # اعمال محدودیت
     await context.bot.set_chat_permissions(
-        chat_id=update.effective_chat.id,
+        chat_id=chat_id,
         permissions=ChatPermissions(can_send_messages=False)
     )
 
-    # ذخیره وضعیت قفل‌شدن در دیتابیس
-    lock_until_str = until.isoformat() + "Z" if until else None
-    update_lock_status(update.effective_chat.id, True, lock_until_str)
+    # ذخیره در دیتابیس
+    update_lock_status(chat_id, True, until.isoformat() if until else None)
 
-    text = f"🔒 گروه قفل شد{' برای ' + duration + ' دقیقه' if until else ''}."
-    await update.message.reply_text(text)
+    duration_text = ""
+    if until:
+        if unit == 'm':
+            duration_text = f" برای {value} دقیقه"
+        elif unit == 'h':
+            duration_text = f" برای {value} ساعت"
+        elif unit == 'd':
+            duration_text = f" برای {value} روز"
+
+    await update.message.reply_text(f"🔒 گروه قفل شد{duration_text}.")
+
+async def check_and_unlock_expired_groups(application: Application):
+    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,lock_until,is_locked"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        return
+
+    for group in response.json():
+        group_id = group["group_id"]
+        is_locked = group["is_locked"]
+        lock_until = group.get("lock_until")
+
+        if is_locked and lock_until:
+            lock_until_dt = datetime.fromisoformat(lock_until)
+            if datetime.utcnow() > lock_until_dt:
+                # باز کردن گروه
+                await application.bot.set_chat_permissions(
+                    chat_id=group_id,
+                    permissions=ChatPermissions(
+                        can_send_messages=True,
+                        can_send_audios=True,
+                        can_send_documents=True,
+                        can_send_photos=True,
+                        can_send_videos=True,
+                        can_send_video_notes=True,
+                        can_send_voice_notes=True,
+                        can_send_polls=True,
+                        can_send_other_messages=True,
+                        can_add_web_page_previews=True
+                    )
+                )
+
+                # پیام باز شدن خودکار
+                try:
+                    await application.bot.send_message(
+                        chat_id=group_id,
+                        text="🔓 قفل گروه به‌صورت خودکار باز شد."
+                    )
+                except:
+                    pass  # اگر ربات بن شده بود یا نتونست پیام بده
+
+                # بروزرسانی دیتابیس
+                update_lock_status(group_id, False, None)
 
 
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
