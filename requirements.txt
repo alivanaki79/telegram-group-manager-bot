@@ -4,4 +4,4 @@ uvicorn
 requests
 python-dotenv
 pytz
-apscheduler
+scheduler
