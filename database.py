@@ -129,56 +129,25 @@ def is_group_locked(group_id: int):
         return True
     return False
 
-def get_night_lock_status(group_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=night_lock_active,night_lock_disabled_until,is_locked"
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200 or not response.json():
-        return None
-
-    return response.json()[0]
-
-
-def get_night_lock_status(group_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=night_lock_active,night_lock_disabled_until,is_locked"
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200 or not response.json():
-        return None
-
-    return response.json()[0]
-
-
-def update_night_lock(group_id: int, active: bool = None, disabled_until: str = None):
+def update_lock_status(group_id: int, is_locked: bool):
     url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    data = {"is_locked": is_locked}
+    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
 
-    data = {}
-    if active is not None:
-        data["night_lock_active"] = active
-    if disabled_until is not None:
-        data["night_lock_disabled_until"] = disabled_until
-
-    if not data:
-        return False
-
-    response = requests.patch(url, headers=headers, json=data)
-    return response.status_code in [200, 204]
-
+def get_night_lock_status(group_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=night_lock_active,night_lock_disabled_until,is_locked"
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200 and res.json():
+        return res.json()[0]
+    return None
 
 def update_last_night_lock_applied(group_id: int):
     url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
-    now = datetime.utcnow().isoformat()
-    data = {
-        "last_night_lock_applied": now
-    }
-    response = requests.patch(url, headers=headers, json=data)
-    return response.status_code in [200, 204]
+    data = {"last_night_lock_applied": datetime.utcnow().isoformat()}
+    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
 
-def update_last_night_lock_released(group_id: int) -> bool:
-    now_utc = datetime.now(timezone.utc).isoformat()
-
+def update_last_night_lock_released(group_id: int):
     url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
-    data = {
-        "last_night_lock_released": now_utc
-    }
+    data = {"last_night_lock_released": datetime.utcnow().isoformat()}
+    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
 
-    response = requests.patch(url, headers=headers, json=data)
-    return response.status_code in [200, 204]
