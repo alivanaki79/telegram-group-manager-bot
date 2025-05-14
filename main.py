@@ -67,6 +67,9 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
+    application.add_handler(CommandHandler("nightlockon", night_lock_on))
+    application.add_handler(CommandHandler("nightlockoff", night_lock_off))
+    application.add_handler(CommandHandler("lockstatus", lock_status))
     
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
@@ -485,3 +488,98 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("🔓 گروه باز شد.")
 
+async def lock_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}&select=is_locked,night_lock_active,night_lock_disabled_until"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200 or not response.json():
+        await update.message.reply_text("❌ خطا در واکشی اطلاعات قفل.")
+        return
+
+    group = response.json()[0]
+    is_locked = group.get("is_locked", False)
+    night_active = group.get("night_lock_active", False)
+    night_disabled_until = group.get("night_lock_disabled_until")
+
+    status_text = f"🔒 Lock: {'Active' if is_locked else 'Inactive'}\n"
+    status_text += f"🌙 Night Lock: {'Active' if night_active else 'Inactive'}"
+
+    if night_disabled_until:
+        try:
+            until_dt = datetime.fromisoformat(night_disabled_until)
+            status_text += f" (Disabled until {until_dt.strftime('%H:%M')})"
+        except:
+            pass
+
+    await update.message.reply_text(status_text
+
+
+async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    admins = await context.bot.get_chat_administrators(chat_id)
+    if user_id not in [admin.user.id for admin in admins]:
+        return await update.message.reply_text("❌ Only admins can enable night lock.")
+
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}"
+    data = {
+        "night_lock_active": True,
+        "night_lock_disabled_until": None
+    }
+    response = requests.patch(url, headers=headers, json=data)
+
+    if response.status_code in [200, 204]:
+        await update.message.reply_text("🌙 Night lock has been enabled.")
+    else:
+        await update.message.reply_text("❌ Failed to enable night lock.")
+
+async def check_and_apply_night_lock(bot: Bot):
+    url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active,night_lock_disabled_until,is_locked"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print("❌ Error fetching groups for night lock")
+        return
+
+    for group in response.json():
+        group_id = group["group_id"]
+        active = group.get("night_lock_active", False)
+        disabled_until = group.get("night_lock_disabled_until")
+        is_locked = group.get("is_locked", False)
+
+        now = datetime.now(timezone.utc)
+
+        if active and not is_locked:
+            if disabled_until:
+                try:
+                    disabled_until_dt = datetime.fromisoformat(disabled_until)
+                    if now < disabled_until_dt:
+                        continue
+                except:
+                    pass
+
+            # Lock the group
+            await bot.set_chat_permissions(
+                chat_id=group_id,
+                permissions=ChatPermissions(can_send_messages=False)
+            )
+
+            print(f"🌙 Night lock activated for group {group_id}")
+
+            try:
+                await bot.send_message(chat_id=group_id, text="🌙 Night lock activated.")
+            except:
+                pass
+
+            update_lock_status(group_id, True, None)
+
+
+async def periodic_check():
+    while True:
+        print("🔁 Running periodic checks...")
+        await check_and_unlock_expired_groups(application.bot)
+        await check_and_apply_night_lock(application.bot)
+        await asyncio.sleep(60)
