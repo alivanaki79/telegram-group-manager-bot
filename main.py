@@ -612,3 +612,27 @@ async def check_and_release_night_lock(bot: Bot):
             update_last_night_lock_released(group_id)
         except Exception as e:
             print(f"❌ خطا در باز کردن گروه {group_id}: {e}")
+
+
+async def disable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    # بررسی اینکه کاربر ادمین هست یا نه
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if user_id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند قفل شبانه را غیرفعال کنند.")
+        return
+
+    # به‌روزرسانی در دیتابیس Supabase
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}"
+    data = {"night_lock_active": False}
+    response = requests.patch(url, headers=headers, json=data)
+
+    if response.status_code in [200, 204]:
+        await update.message.reply_text("🌓 قفل شبانه برای این گروه *غیرفعال* شد.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("⚠️ خطایی در غیرفعال‌سازی قفل شبانه رخ داد. لطفاً دوباره تلاش کنید.")
+
