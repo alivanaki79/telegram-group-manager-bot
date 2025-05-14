@@ -62,6 +62,9 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(lambda: check_and_unlock_expired_groups(application.bot), IntervalTrigger(minutes=1))
+    scheduler.start()
     
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
