@@ -636,3 +636,21 @@ async def disable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text("⚠️ خطایی در غیرفعال‌سازی قفل شبانه رخ داد. لطفاً دوباره تلاش کنید.")
 
+
+async def nightlock_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{chat_id}&select=night_lock_active"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200 or not response.json():
+        await update.message.reply_text("❌ خطا در دریافت وضعیت قفل شبانه.")
+        return
+
+    active = response.json()[0].get("night_lock_active", False)
+
+    if active:
+        await update.message.reply_text("🌙 قفل شبانه فعال است.")
+    else:
+        await update.message.reply_text("🌙 قفل شبانه **غیرفعال** است.")
+
