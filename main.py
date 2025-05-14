@@ -358,7 +358,8 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # ذخیره وضعیت قفل‌شدن در دیتابیس
-    update_lock_status(update.effective_chat.id, True, until.isoformat() if until else None)
+    lock_until_str = until.isoformat() + "Z" if until else None
+    update_lock_status(update.effective_chat.id, True, lock_until_str)
 
     text = f"🔒 گروه قفل شد{' برای ' + duration + ' دقیقه' if until else ''}."
     await update.message.reply_text(text)
