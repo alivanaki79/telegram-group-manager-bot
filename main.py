@@ -7,7 +7,7 @@ from datetime import timedelta, datetime, time, timezone
 import pytz
 
 from fastapi import FastAPI, Request
-from telegram import Update, ChatPermissions
+from telegram import Update, ChatPermissions, Bot
 from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, ChatMemberHandler, JobQueue
