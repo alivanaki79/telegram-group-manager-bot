@@ -12,7 +12,7 @@ from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, ChatMemberHandler, JobQueue
 )
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY
 from database import add_group, get_subscription_status, add_warning, remove_warning, get_warning_count, update_lock_status, is_group_locked
 
 night_lock_disabled_groups = set()
