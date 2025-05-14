@@ -172,4 +172,13 @@ def update_last_night_lock_applied(group_id: int):
     response = requests.patch(url, headers=headers, json=data)
     return response.status_code in [200, 204]
 
+def update_last_night_lock_released(group_id: int) -> bool:
+    now_utc = datetime.now(timezone.utc).isoformat()
 
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    data = {
+        "last_night_lock_released": now_utc
+    }
+
+    response = requests.patch(url, headers=headers, json=data)
+    return response.status_code in [200, 204]
