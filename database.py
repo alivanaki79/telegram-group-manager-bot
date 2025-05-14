@@ -100,6 +100,42 @@ def remove_warning(group_id: int, user_id: int, count_to_remove: int = 1):
         return new_count
     return 0
 
+from datetime import datetime, timezone
+import requests
+
+def get_night_lock_status(group_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=night_lock_active,night_lock_disabled_until,is_locked"
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200 or not response.json():
+        return None
+    return response.json()[0]
+
+def update_night_lock(group_id: int, active: bool = None, disabled_until: str = None):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    data = {}
+    if active is not None:
+        data["night_lock_active"] = active
+    if disabled_until is not None:
+        data["night_lock_disabled_until"] = disabled_until
+    if not data:
+        return False
+    response = requests.patch(url, headers=headers, json=data)
+    return response.status_code in [200, 204]
+
+def update_last_night_lock_applied(group_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    now = datetime.utcnow().isoformat()
+    data = {"last_night_lock_applied": now}
+    response = requests.patch(url, headers=headers, json=data)
+    return response.status_code in [200, 204]
+
+def update_last_night_lock_released(group_id: int):
+    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
+    now = datetime.utcnow().isoformat()
+    data = {"last_night_lock_released": now}
+    response = requests.patch(url, headers=headers, json=data)
+    return response.status_code in [200, 204]
+
 def update_lock_status(group_id: int, is_locked: bool, lock_until: str = None):
     url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
     data = {
@@ -114,40 +150,15 @@ def is_group_locked(group_id: int):
     response = requests.get(url, headers=headers)
     if response.status_code != 200 or not response.json():
         return False
-
     data = response.json()[0]
     is_locked = data.get("is_locked", False)
     lock_until = data.get("lock_until")
-
     if is_locked:
         if lock_until:
             lock_until_dt = datetime.fromisoformat(lock_until)
             if datetime.utcnow() > lock_until_dt:
-                # قفل منقضی شده، بازش می‌کنیم
                 update_lock_status(group_id, False, None)
                 return False
         return True
     return False
-
-def update_lock_status(group_id: int, is_locked: bool):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
-    data = {"is_locked": is_locked}
-    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
-
-def get_night_lock_status(group_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}&select=night_lock_active,night_lock_disabled_until,is_locked"
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200 and res.json():
-        return res.json()[0]
-    return None
-
-def update_last_night_lock_applied(group_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
-    data = {"last_night_lock_applied": datetime.utcnow().isoformat()}
-    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
-
-def update_last_night_lock_released(group_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/groups?group_id=eq.{group_id}"
-    data = {"last_night_lock_released": datetime.utcnow().isoformat()}
-    return requests.patch(url, headers=headers, json=data).status_code in [200, 204]
 
