@@ -521,7 +521,7 @@ async def check_and_apply_night_lock(bot: Bot):
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
 
-    if not (2 <= now_tehran.hour < 7):
+    if not (now_tehran.hour == 2 and now_tehran.minute < 10):
         return
 
     url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active,night_lock_disabled_until,is_locked,last_night_lock_applied,lock_until"
@@ -570,7 +570,7 @@ async def check_and_apply_night_lock(bot: Bot):
 
         try:
             await bot.set_chat_permissions(chat_id=group_id, permissions=ChatPermissions(can_send_messages=False))
-            await bot.send_message(chat_id=group_id, text="🌙 قفل شبانه فعال شد.")
+            await bot.send_message(chat_id=group_id, text="🌙 قفل شبانه برای امشب از ساعت 2 تا 7 فعال شد. شبتون زیبا")
             update_lock_status(group_id, True)  # فقط پرچم is_locked
             update_last_night_lock_applied(group_id)
         except Exception as e:
@@ -656,7 +656,7 @@ async def enable_night_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = requests.patch(url, headers=headers, json=data)
 
     if response.status_code in [200, 204]:
-        await update.message.reply_text("✅ قفل شبانه فعال شد.")
+        await update.message.reply_text("✅ قفل شبانه در این کروه فعال شد.")
     else:
         await update.message.reply_text("❌ خطا در فعال‌سازی قفل شبانه.")
 
