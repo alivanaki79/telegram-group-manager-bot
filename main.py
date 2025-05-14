@@ -59,6 +59,9 @@ async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("pin", pin_message))
+    application.add_handler(CommandHandler("pinloud", pin_message_loud))
+    application.add_handler(CommandHandler("unpin", unpin_message))
     application.add_handler(CommandHandler("warn", warn))
     application.add_handler(CommandHandler("mute", mute))
     application.add_handler(CommandHandler("unmute", unmute))
@@ -127,6 +130,77 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return None
 
     return None
+
+
+async def pin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+    
+    if user_id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند پیام را پین کنند.")
+        return
+
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❗️ لطفاً روی پیامی ریپلای بزنید و سپس دستور /pin را ارسال کنید.")
+        return
+
+    try:
+        await context.bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=update.message.reply_to_message.message_id,
+            disable_notification=True  # بی‌صدا
+        )
+        await update.message.reply_text("📌 پیام پین شد (بدون نوتیفیکیشن).")
+    except Exception as e:
+        print(f"❌ خطا در پین کردن پیام: {e}")
+        await update.message.reply_text("⚠️ خطایی در پین کردن پیام رخ داد.")
+
+async def pin_message_loud(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if user_id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند پیام را پین کنند.")
+        return
+
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❗️ لطفاً روی پیامی ریپلای بزنید و سپس دستور /pinloud را ارسال کنید.")
+        return
+
+    try:
+        await context.bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=update.message.reply_to_message.message_id,
+            disable_notification=False  # با صدا
+        )
+        await update.message.reply_text("📌 پیام پین شد (با نوتیفیکیشن).")
+    except Exception as e:
+        print(f"❌ خطا در پین کردن پیام: {e}")
+        await update.message.reply_text("⚠️ خطایی در پین کردن پیام رخ داد.")
+
+async def unpin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    chat_admins = await context.bot.get_chat_administrators(chat_id)
+    admin_ids = [admin.user.id for admin in chat_admins]
+
+    if user_id not in admin_ids:
+        await update.message.reply_text("❌ فقط ادمین‌ها می‌توانند پیام را آنپین کنند.")
+        return
+
+    try:
+        await context.bot.unpin_chat_message(chat_id=chat_id)
+        await update.message.reply_text("📍 آخرین پیام پین‌شده برداشته شد.")
+    except Exception as e:
+        print(f"❌ خطا در آنپین کردن پیام: {e}")
+        await update.message.reply_text("⚠️ خطایی در آنپین کردن پیام رخ داد.")
 
 
 # اخطار به کاربر
