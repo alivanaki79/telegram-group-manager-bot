@@ -43,11 +43,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"📅 اشتراک این گروه تا {days} روز دیگر فعال است.")
 
-# تابعی برای بررسی قفل‌های منقضی شده به صورت دوره‌ای
+# ✅ تابع بررسی دوره‌ای
 async def periodic_check():
     while True:
+        print("🔁 در حال بررسی گروه‌های قفل‌شده...")
         await check_and_unlock_expired_groups(application.bot)
-        await asyncio.sleep(60)  # بررسی هر ۶۰ ثانیه یکبار
+        await asyncio.sleep(60)
 
 # رویداد شروع برنامه
 @app.on_event("startup")
@@ -65,14 +66,15 @@ async def startup():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
-
-    # شروع تسک دوره‌ای
-    asyncio.create_task(periodic_check())
     
     # ست کردن وبهوک در تلگرام
     await application.bot.set_webhook(WEBHOOK_URL)
     await application.initialize()
     await application.start()
+
+    # ✅ اجرای periodic_check بعد از مقداردهی application
+    asyncio.create_task(periodic_check())
+    
     print(f"✅ Webhook set to {WEBHOOK_URL}")
 
 # هندل کردن پیام‌های دریافتی از تلگرام
@@ -428,7 +430,9 @@ async def check_and_unlock_expired_groups(application: Application):
                         can_add_web_page_previews=True
                     )
                 )
-
+                
+                print(f"🔓 باز کردن خودکار گروه {group_id} چون زمانش تموم شده.")
+                
                 # پیام باز شدن خودکار
                 try:
                     await application.bot.send_message(
