@@ -95,14 +95,14 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-@app.api_route("/", methods=["GET", "HEAD"])
-async def root():
-    print("🔁 پینگ شد، بررسی‌ها آغاز شد...")
+@app.get("/")
+async def ping():
+    print("🔁 پینگ دستی انجام شد.")
     await check_and_warn_night_lock(application.bot)
     await check_and_unlock_expired_groups(application.bot)
     await check_and_apply_night_lock(application.bot)
     await check_and_release_night_lock(application.bot)
-    return {"status": "Bot is running!"}
+    return {"status": "Pinged"}
 
 # اجرای برنامه با uvicorn
 if __name__ == "__main__":
