@@ -591,10 +591,9 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def check_and_apply_night_lock(bot: Bot):
-    print(f"🕑 بررسی قفل شبانه - ساعت تهران: {now_tehran.strftime('%H:%M')}")
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
-
+    print(f"🕑 بررسی قفل شبانه - ساعت تهران: {now_tehran.strftime('%H:%M')}")
     if not (now_tehran.hour == 2 and now_tehran.minute < 10):
         return
 
