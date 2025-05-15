@@ -132,7 +132,7 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return None
 
 
-BOT_NAME = ربات
+BOT_NAME = "ربات"
 
 async def handle_general_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
