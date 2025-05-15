@@ -59,7 +59,8 @@ async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter, handle_general_messages))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_general_messages))
     application.add_handler(CommandHandler("pin", pin_message))
     application.add_handler(CommandHandler("pinloud", pin_message_loud))
     application.add_handler(CommandHandler("unpin", unpin_message))
@@ -219,7 +220,7 @@ async def unpin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         await context.bot.unpin_chat_message(chat_id=chat_id)
-        await update.message.reply_text("📍 آخرین پیام پین‌شده برداشته شد.")
+        await update.message.reply_text("📍 قدیمی ترین پیام پین‌شده برداشته شد.")
     except Exception as e:
         print(f"❌ خطا در آنپین کردن پیام: {e}")
         await update.message.reply_text("⚠️ خطایی در آنپین کردن پیام رخ داد.")
