@@ -95,7 +95,7 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def ping():
     now = datetime.now(TEHRAN).strftime("%Y-%m-%d %H:%M:%S")
     print(f"📡 پینگ UptimeRobot انجام شد - زمان: {now}")
