@@ -83,7 +83,7 @@ async def startup():
     await application.start()
 
     # ✅ اجرای periodic_check بعد از مقداردهی application
-    asyncio.create_task(periodic_check())
+    # asyncio.create_task(periodic_check())
     
     print(f"✅ Webhook set to {WEBHOOK_URL}")
 
@@ -95,10 +95,14 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-# برای تست در مرورگر
 @app.get("/")
-def root():
-    return {"status": "Bot is running!"}
+async def ping():
+    print("🔁 پینگ شد، بررسی‌ها آغاز شد...")
+    await check_and_warn_night_lock(application.bot)
+    await check_and_unlock_expired_groups(application.bot)
+    await check_and_apply_night_lock(application.bot)
+    await check_and_release_night_lock(application.bot)
+    return {"status": "done"}
 
 # اجرای برنامه با uvicorn
 if __name__ == "__main__":
@@ -571,14 +575,14 @@ async def check_and_warn_night_lock(bot: Bot):
 
 
 # ✅ سپس بلافاصله بعدش:
-async def periodic_check():
-    while True:
-        print("🔁 در حال بررسی گروه‌های قفل‌شده...")
-        await check_and_warn_night_lock(application.bot)  # هشدار
-        await check_and_unlock_expired_groups(application.bot)
-        await check_and_apply_night_lock(application.bot)  # ✅ قفل شبانه
-        await check_and_release_night_lock(application.bot)  # ✅ باز کردن صبح
-        await asyncio.sleep(60)
+# async def periodic_check():
+#    while True:
+#        print("🔁 در حال بررسی گروه‌های قفل‌شده...")
+ #       await check_and_warn_night_lock(application.bot)  # هشدار
+  #      await check_and_unlock_expired_groups(application.bot)
+   #     await check_and_apply_night_lock(application.bot)  # ✅ قفل شبانه
+    #    await check_and_release_night_lock(application.bot)  # ✅ باز کردن صبح
+     #   await asyncio.sleep(60)
 
 
 async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
