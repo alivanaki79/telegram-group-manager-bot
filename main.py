@@ -676,7 +676,7 @@ async def check_and_release_night_lock(bot: Bot):
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
     if not (now_tehran.hour == 7 and now_tehran.minute < 10):
-    print(f"⏰ زمان فعلی {now_tehran.strftime('%H:%M')}، هنوز زمان باز کردن نیست.")
+        print(f"⏰ زمان فعلی {now_tehran.strftime('%H:%M')}، هنوز زمان باز کردن نیست.")
         return
     print("✅ زمان باز کردن گروه رسیده.")
 
