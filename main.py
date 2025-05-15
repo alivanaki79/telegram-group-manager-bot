@@ -95,7 +95,7 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     print("🔁 پینگ شد، بررسی‌ها آغاز شد...")
     await check_and_warn_night_lock(application.bot)
