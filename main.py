@@ -95,9 +95,9 @@ async def webhook_handler(request: Request):
     await application.process_update(update)
     return {"status": "ok"}
 
-@app.get("/")
+@app.get("/ping")
 async def ping():
-    print("🔁 پینگ دستی انجام شد.")
+    print("📡 پینگ UptimeRobot انجام شد.")
     await check_and_warn_night_lock(application.bot)
     await check_and_unlock_expired_groups(application.bot)
     await check_and_apply_night_lock(application.bot)
