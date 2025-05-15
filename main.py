@@ -59,8 +59,8 @@ async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_general_messages))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_general_messages), group=1)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter), group=2)
     application.add_handler(CommandHandler("pin", pin_message))
     application.add_handler(CommandHandler("pinloud", pin_message_loud))
     application.add_handler(CommandHandler("unpin", unpin_message))
