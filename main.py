@@ -96,13 +96,15 @@ async def webhook_handler(request: Request):
     return {"status": "ok"}
 
 @app.get("/")
-async def ping():
-    print("📡 پینگ UptimeRobot انجام شد.")
-    await check_and_warn_night_lock(application.bot)
-    await check_and_unlock_expired_groups(application.bot)
-    await check_and_apply_night_lock(application.bot)
-    await check_and_release_night_lock(application.bot)
-    return {"status": "Pinged"}
+def ping():
+    now = datetime.now(TEHRAN).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"📡 پینگ UptimeRobot انجام شد - زمان: {now}")
+    asyncio.create_task(check_and_warn_night_lock(application.bot))
+    asyncio.create_task(check_and_unlock_expired_groups(application.bot))
+    asyncio.create_task(check_and_apply_night_lock(application.bot))
+    asyncio.create_task(check_and_release_night_lock(application.bot))
+    return {"status": f"Pinged at {now}"}
+    
 
 # اجرای برنامه با uvicorn
 if __name__ == "__main__":
