@@ -59,6 +59,7 @@ async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter, handle_general_messages))
     application.add_handler(CommandHandler("pin", pin_message))
     application.add_handler(CommandHandler("pinloud", pin_message_loud))
     application.add_handler(CommandHandler("unpin", unpin_message))
@@ -69,7 +70,6 @@ async def startup():
     application.add_handler(CommandHandler("ban", ban))
     application.add_handler(CommandHandler("unban", unban))
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_filter))
     application.add_handler(CommandHandler("lock", lock))
     application.add_handler(CommandHandler("unlock", unlock))
     application.add_handler(CommandHandler("enablenightlock", enable_night_lock))
@@ -130,6 +130,28 @@ async def get_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return None
 
     return None
+
+
+BOT_NAME = ربات
+
+async def handle_general_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    text = update.message.text.lower().strip()
+    user_name = update.effective_user.first_name
+
+    # حالت سلام خالی
+    if text == "سلام":
+        await update.message.reply_text(f"سلام {user_name}! امیدوارم حالت خوب باشه 🌸")
+        return
+
+    # حالت صدا زدن ربات (مثل: ربات، ربات جان، سلام ربات و ...)
+    if BOT_NAME in text:
+        await update.message.reply_text(
+            f"جانم {user_name}! در صورتی که کاری دارید با ادمین‌ها درمیون بزارید تا هوشمندتر بشم 🤖"
+        )
+        return
 
 
 async def pin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
