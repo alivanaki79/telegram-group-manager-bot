@@ -675,9 +675,11 @@ async def check_and_apply_night_lock(bot: Bot):
 async def check_and_release_night_lock(bot: Bot):
     now_utc = datetime.now(timezone.utc)
     now_tehran = now_utc.astimezone(TEHRAN)
-
-    if now_tehran.hour != 7:
+    if not (now_tehran.hour == 7 and now_tehran.minute < 10):
+    print(f"⏰ زمان فعلی {now_tehran.strftime('%H:%M')}، هنوز زمان باز کردن نیست.")
         return
+    print("✅ زمان باز کردن گروه رسیده.")
+
 
     url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,is_locked,last_night_lock_released,lock_until"
     response = requests.get(url, headers=headers)
