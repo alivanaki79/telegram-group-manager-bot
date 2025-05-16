@@ -557,7 +557,7 @@ async def check_and_unlock_expired_groups(bot: Bot):
 
 async def check_and_warn_night_lock(bot: Bot):
     now = datetime.utcnow()
-    if now.hour == 21 and 20 <= now.minute < 30:  # بازه 01:50 تا 02:00 به وقت ایران
+    if now.hour == 22 and 20 <= now.minute < 30:  # بازه 01:50 تا 02:00 به وقت ایران
         print("⏰ در حال ارسال هشدار قفل شبانه...")
 
         url = f"{SUPABASE_URL}/rest/v1/groups?select=group_id,night_lock_active"
